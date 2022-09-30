@@ -1,0 +1,34 @@
+attention_dropout: 0.1
+batch_size: 128
+betas:
+- 0.9
+- 0.95
+checkpoints_path: ./models/dt
+clip_grad: 100.0
+deterministic_torch: false
+device: cuda
+embedding_dim: 128
+embedding_dropout: 0.1
+env_name: halfcheetah-medium-expert-v2
+episode_len: 1000
+eval_episodes: 10
+eval_every: 1
+eval_seed: 42
+group: DT-D4RL
+learning_rate: 0.0003
+max_action: 1.0
+name: DT
+update_steps: 100000
+num_heads: 8
+num_layers: 6
+num_workers: 4
+project: CORL
+residual_dropout: 0.1
+reward_scale: 0.001
+seq_len: 20
+target_returns:
+- 12000.0
+- 6000.0
+train_seed: 10
+warmup_steps: 10000
+weight_decay: 0.0001
