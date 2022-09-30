@@ -5,6 +5,7 @@ __pycache__/
 
 # C extensions
 *.so
+.idea
 
 # Distribution / packaging
 .Python
@@ -127,3 +128,13 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# custom
+.DS_Store
+.csv
+.tsv
+.pth
+.json
+.yaml
+wandb
+assets/
