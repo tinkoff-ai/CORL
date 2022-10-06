@@ -38,7 +38,7 @@ class TrainConfig:
     max_action: float = 1.0
     # training params
     env_name: str = "halfcheetah-medium-v2"
-    learning_rate: float = 1e-4
+    learning_rate: float = 3e-4
     betas: Tuple[float, float] = (0.9, 0.999)
     weight_decay: float = 1e-4
     clip_grad: Optional[float] = 0.25
@@ -49,14 +49,14 @@ class TrainConfig:
     num_workers: int = 4
     # evaluation params
     target_returns: Tuple[float, ...] = (12000.0, 6000.0)
-    eval_episodes: int = 10
-    eval_every: int = 1000
+    eval_episodes: int = 100
+    eval_every: int = 10_000
     # general params
     checkpoints_path: Optional[str] = None
     deterministic_torch: bool = False
     train_seed: int = 10
     eval_seed: int = 42
-    device: str = "cuda"
+    device: str = "cpu"
 
     def __post_init__(self):
         self.name = f"{self.name}-{self.env_name}-{str(uuid.uuid4())[:8]}"
@@ -176,9 +176,9 @@ class SequenceDataset(IterableDataset):
     def __prepare_sample(self, traj_idx, start_idx):
         traj = self.dataset[traj_idx]
         # https://github.com/kzl/decision-transformer/blob/e2d82e68f330c00f763507b3b01d774740bee53f/gym/experiment.py#L128 # noqa
-        states = traj["observations"][start_idx : start_idx + self.seq_len]
-        actions = traj["actions"][start_idx : start_idx + self.seq_len]
-        returns = traj["returns"][start_idx : start_idx + self.seq_len]
+        states = traj["observations"][start_idx: start_idx + self.seq_len]
+        actions = traj["actions"][start_idx: start_idx + self.seq_len]
+        returns = traj["returns"][start_idx: start_idx + self.seq_len]
         time_steps = np.arange(start_idx, start_idx + self.seq_len)
 
         states = (states - self.state_mean) / self.state_std
