@@ -325,16 +325,18 @@ class DecisionTransformer(nn.Module):
         returns_emb = self.return_emb(returns_to_go.unsqueeze(-1)) + time_emb
 
         # [batch_size, seq_len * 3, emb_dim], (r_0, s_0, a_0, r_1, s_1, a_1, ...)
-        sequence = torch.stack(
-            [returns_emb, state_emb, act_emb], dim=1
-        ).permute(0, 2, 1, 3).reshape(batch_size, 3 * seq_len, self.embedding_dim)
-
+        sequence = (
+            torch.stack([returns_emb, state_emb, act_emb], dim=1)
+            .permute(0, 2, 1, 3)
+            .reshape(batch_size, 3 * seq_len, self.embedding_dim)
+        )
         if padding_mask is not None:
             # [batch_size, seq_len * 3], stack mask identically to fit the sequence
-            padding_mask = torch.stack(
-                [padding_mask, padding_mask, padding_mask], dim=1
-            ).permute(0, 2, 1).reshape(batch_size, 3 * seq_len)
-
+            padding_mask = (
+                torch.stack([padding_mask, padding_mask, padding_mask], dim=1)
+                .permute(0, 2, 1)
+                .reshape(batch_size, 3 * seq_len)
+            )
         # LayerNorm and Dropout as in original implementation
         out = self.emb_norm(sequence)
         out = self.emb_drop(out)
