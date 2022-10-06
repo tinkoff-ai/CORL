@@ -1,5 +1,5 @@
 # inspiration:
-# 1. https://github.com/kzl/decision-transformer/blob/master/atari/mingpt/model_atari.py  # noqa
+# 1. https://github.com/kzl/decision-transformer/blob/master/gym/decision_transformer/models/decision_transformer.py  # noqa
 # 2. https://github.com/karpathy/minGPT
 from typing import Any, DefaultDict, Dict, List, Optional, Tuple, Union
 from collections import defaultdict
@@ -15,7 +15,7 @@ import pyrallis
 import torch
 import torch.nn as nn
 from torch.nn import functional as F  # noqa
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, IterableDataset
 from tqdm.auto import tqdm, trange  # noqa
 import wandb
 
@@ -43,7 +43,7 @@ class TrainConfig:
     weight_decay: float = 1e-4
     clip_grad: Optional[float] = 0.25
     batch_size: int = 64
-    update_steps: int = 10_000
+    update_steps: int = 100_000
     warmup_steps: int = 10_000
     reward_scale: float = 0.001
     num_workers: int = 4
@@ -107,13 +107,19 @@ def wrap_env(
     return env
 
 
-# TODO: add type hint here, -> Iterator[...of what???...]
-def cycle(dataloader: DataLoader):
-    while True:
-        yield from dataloader
-
-
 # some utils functionalities specific for Decision Transformer
+def pad_along_axis(
+    arr: np.ndarray, pad_to: int, axis: int = 0, fill_value: float = 0.0
+) -> np.ndarray:
+    pad_size = pad_to - arr.shape[axis]
+    if pad_size <= 0:
+        return arr
+
+    npad = [(0, 0)] * arr.ndim
+    npad[axis] = (0, pad_size)
+    return np.pad(arr, pad_width=npad, mode="constant", constant_values=fill_value)
+
+
 def discounted_cumsum(x: np.ndarray, gamma: float) -> np.ndarray:
     cumsum = np.zeros_like(x)
     cumsum[-1] = x[-1]
@@ -156,41 +162,43 @@ def load_d4rl_trajectories(
     return traj, info
 
 
-class SequenceDataset(Dataset):
+class SequenceDataset(IterableDataset):
     def __init__(self, env_name: str, seq_len: int = 10, reward_scale: float = 1.0):
         self.dataset, info = load_d4rl_trajectories(env_name, gamma=1.0)
-
-        self.indices = []
-        for traj_idx, length in enumerate(info["traj_lens"]):
-            # last will be [end - seq_len, end],
-            # last seq_len indices are ignored as starts
-            end = length - seq_len
-            for i in range(end):
-                self.indices.append((traj_idx, i, i + seq_len))
-
-        # for state normalization & reward scaling
-        self.state_mean, self.state_std = info["obs_mean"], info["obs_std"]
         self.reward_scale = reward_scale
+        self.seq_len = seq_len
 
-    def __len__(self):
-        return len(self.indices)
+        self.state_mean = info["obs_mean"]
+        self.state_std = info["obs_std"]
+        # https://github.com/kzl/decision-transformer/blob/e2d82e68f330c00f763507b3b01d774740bee53f/gym/experiment.py#L116 # noqa
+        self.sample_prob = info["traj_lens"] / info["traj_lens"].sum()
 
-    def __getitem__(
-        self, idx: int
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        traj_idx, start_idx, end_idx = self.indices[idx]
+    def __prepare_sample(self, traj_idx, start_idx):
+        traj = self.dataset[traj_idx]
+        # https://github.com/kzl/decision-transformer/blob/e2d82e68f330c00f763507b3b01d774740bee53f/gym/experiment.py#L128 # noqa
+        states = traj["observations"][start_idx : start_idx + self.seq_len]
+        actions = traj["actions"][start_idx : start_idx + self.seq_len]
+        returns = traj["returns"][start_idx : start_idx + self.seq_len]
+        time_steps = np.arange(start_idx, start_idx + self.seq_len)
 
-        # no mask for padding, as sampling always of len seq_len
-        # TODO: sample every possible lens, pad if smaller than needed
-        states = self.dataset[traj_idx]["observations"][start_idx:end_idx]
-        actions = self.dataset[traj_idx]["actions"][start_idx:end_idx]
-        returns = self.dataset[traj_idx]["returns"][start_idx:end_idx].reshape(-1, 1)
-        time_steps = np.arange(start_idx, end_idx)
+        states = (states - self.state_mean) / self.state_std
+        returns = returns * self.reward_scale
 
-        norm_states = (states - self.state_mean) / self.state_std
-        norm_returns = returns * self.reward_scale
+        if states.shape[0] < self.seq_len:
+            states = pad_along_axis(states, pad_to=self.seq_len)
+            actions = pad_along_axis(actions, pad_to=self.seq_len)
+            returns = pad_along_axis(returns, pad_to=self.seq_len)
 
-        return norm_states, actions, norm_returns, time_steps
+        mask = np.hstack(
+            [np.ones(states.shape[0]), np.zeros(self.seq_len - states.shape[0])]
+        )
+        return states, actions, returns, time_steps, mask
+
+    def __iter__(self):
+        while True:
+            traj_idx = np.random.choice(len(self.dataset), p=self.sample_prob)
+            start_idx = random.randint(0, self.dataset[traj_idx]["rewards"].shape[0] - 1)
+            yield self.__prepare_sample(traj_idx, start_idx)
 
 
 # Decision Transformer implementation
@@ -224,14 +232,20 @@ class TransformerBlock(nn.Module):
         self.seq_len = seq_len
 
     # [batch_size, seq_len, emb_dim] -> [batch_size, seq_len, emb_dim]
-    def forward(self, x: torch.FloatTensor) -> torch.FloatTensor:
+    def forward(
+        self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         causal_mask = self.causal_mask[: x.shape[1], : x.shape[1]]
 
         norm_x = self.norm1(x)
         attention_out = self.attention(
-            norm_x, norm_x, norm_x, attn_mask=causal_mask, need_weights=False
+            query=norm_x,
+            key=norm_x,
+            value=norm_x,
+            attn_mask=causal_mask,
+            key_padding_mask=padding_mask,
+            need_weights=False,
         )[0]
-
         x = x + self.drop(attention_out)
         x = x + self.mlp(self.norm2(x))
         return x
@@ -257,14 +271,14 @@ class DecisionTransformer(nn.Module):
         self.emb_norm = nn.LayerNorm(embedding_dim)
 
         self.out_norm = nn.LayerNorm(embedding_dim)
-
-        self.timestep_emb = nn.Embedding(episode_len, embedding_dim)
+        # additional seq_len embeddings for padding timesteps
+        self.timestep_emb = nn.Embedding(episode_len + seq_len, embedding_dim)
         self.state_emb = nn.Linear(state_dim, embedding_dim)
         self.action_emb = nn.Linear(action_dim, embedding_dim)
         self.return_emb = nn.Linear(1, embedding_dim)
 
-        self.blocks = nn.Sequential(
-            *[
+        self.blocks = nn.ModuleList(
+            [
                 TransformerBlock(
                     seq_len=3 * seq_len,
                     embedding_dim=embedding_dim,
@@ -277,6 +291,7 @@ class DecisionTransformer(nn.Module):
         )
         self.action_head = nn.Sequential(nn.Linear(embedding_dim, action_dim), nn.Tanh())
         self.seq_len = seq_len
+        self.embedding_dim = embedding_dim
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.episode_len = episode_len
@@ -296,29 +311,41 @@ class DecisionTransformer(nn.Module):
 
     def forward(
         self,
-        states: torch.FloatTensor,  # [batch_size, seq_len, state_dim]
-        actions: torch.FloatTensor,  # [batch_size, seq_len, action_dim]
-        returns_to_go: torch.FloatTensor,  # [batch_size, seq_len, 1]
-        time_steps: torch.LongTensor,  # [batch_size, seq_len]
+        states: torch.Tensor,  # [batch_size, seq_len, state_dim]
+        actions: torch.Tensor,  # [batch_size, seq_len, action_dim]
+        returns_to_go: torch.Tensor,  # [batch_size, seq_len]
+        time_steps: torch.Tensor,  # [batch_size, seq_len]
+        padding_mask: Optional[torch.Tensor] = None,  # [batch_size, seq_len]
     ) -> torch.FloatTensor:
+        batch_size, seq_len = states.shape[0], states.shape[1]
         # [batch_size, seq_len, emb_dim]
         time_emb = self.timestep_emb(time_steps)
-        # [batch_size, seq_len, emb_dim]
         state_emb = self.state_emb(states) + time_emb
         act_emb = self.action_emb(actions) + time_emb
-        returns_emb = self.return_emb(returns_to_go) + time_emb
+        returns_emb = self.return_emb(returns_to_go.unsqueeze(-1)) + time_emb
+
         # [batch_size, seq_len * 3, emb_dim], (r_0, s_0, a_0, r_1, s_1, a_1, ...)
-        # during evaluation last action will be dummy padding (just zeros)
-        sequence = torch.concat([returns_emb, state_emb, act_emb], dim=1)
+        sequence = torch.stack(
+            [returns_emb, state_emb, act_emb], dim=1
+        ).permute(0, 2, 1, 3).reshape(batch_size, 3 * seq_len, self.embedding_dim)
+
+        if padding_mask is not None:
+            # [batch_size, seq_len * 3], stack mask identically to fit the sequence
+            padding_mask = torch.stack(
+                [padding_mask, padding_mask, padding_mask], dim=1
+            ).permute(0, 2, 1).reshape(batch_size, 3 * seq_len)
+
         # LayerNorm and Dropout as in original implementation
-        sequence = self.emb_norm(sequence)
-        sequence = self.emb_drop(sequence)
+        out = self.emb_norm(sequence)
+        out = self.emb_drop(out)
 
-        out = self.out_norm(self.blocks(sequence))
+        for block in self.blocks:
+            out = block(out, padding_mask=padding_mask)
+
+        out = self.out_norm(out)
         # [batch_size, seq_len, action_dim]
-        # predict actions from state embeddings
+        # predict actions only from state embeddings
         out = self.action_head(out[:, 1::3]) * self.max_action
-
         return out
 
 
@@ -336,7 +363,7 @@ def eval_rollout(
     actions = torch.zeros(
         1, model.episode_len, model.action_dim, dtype=torch.float, device=device
     )
-    returns = torch.zeros(1, model.episode_len + 1, 1, dtype=torch.float, device=device)
+    returns = torch.zeros(1, model.episode_len + 1, dtype=torch.float, device=device)
     time_steps = torch.arange(model.episode_len, dtype=torch.long, device=device)
     time_steps = time_steps.view(1, -1)
 
@@ -384,7 +411,6 @@ def train(config: TrainConfig):
     trainloader = DataLoader(
         dataset,
         batch_size=config.batch_size,
-        shuffle=True,
         pin_memory=True,
         num_workers=config.num_workers,
     )
@@ -395,7 +421,6 @@ def train(config: TrainConfig):
         state_std=dataset.state_std,
         reward_scale=config.reward_scale,
     )
-
     # model & optimizer & scheduler setup
     config.state_dim = eval_env.observation_space.shape[0]
     config.action_dim = eval_env.action_space.shape[0]
@@ -423,7 +448,6 @@ def train(config: TrainConfig):
         optim,
         lambda steps: min((steps + 1) / config.warmup_steps, 1),
     )
-
     # save config to the checkpoint
     if config.checkpoints_path is not None:
         print(f"Checkpoints path: {config.checkpoints_path}")
@@ -432,15 +456,23 @@ def train(config: TrainConfig):
             pyrallis.dump(config, f)
 
     print(f"Total parameters: {sum(p.numel() for p in model.parameters())}")
-
-    trainloader_inf_iterator = cycle(trainloader)
+    trainloader_iter = iter(trainloader)
     for step in trange(config.update_steps, desc="Training"):
-        batch = next(trainloader_inf_iterator)
-        states, actions, returns, time_steps = [b.to(config.device) for b in batch]
+        batch = next(trainloader_iter)
+        states, actions, returns, time_steps, mask = [b.to(config.device) for b in batch]
+        # True value indicates that the corresponding key value will be ignored
+        padding_mask = ~mask.to(torch.bool)
 
-        predicted_actions = model(states, actions, returns, time_steps)
-        # TODO: mask out short trajectories here
-        loss = F.mse_loss(predicted_actions, actions.detach())
+        predicted_actions = model(
+            states=states,
+            actions=actions,
+            returns_to_go=returns,
+            time_steps=time_steps,
+            padding_mask=padding_mask,
+        )
+        loss = F.mse_loss(predicted_actions, actions.detach(), reduction="none")
+        # [batch_size, seq_len, action_dim] * [batch_size, seq_len, 1]
+        loss = (loss * mask.unsqueeze(-1)).mean()
 
         optim.zero_grad()
         loss.backward()
@@ -458,7 +490,8 @@ def train(config: TrainConfig):
         )
 
         # validation in the env for the actual online performance
-        if step % config.eval_every == 0:
+        if step % config.eval_every == 0 or step == config.update_steps - 1:
+            model.eval()
             for target_return in config.target_returns:
                 eval_env.seed(config.eval_seed)
                 eval_returns = []
@@ -488,6 +521,7 @@ def train(config: TrainConfig):
                     },
                     step=step,
                 )
+            model.train()
 
     if config.checkpoints_path is not None:
         checkpoint = {
