@@ -38,7 +38,7 @@ class TrainConfig:
     max_action: float = 1.0
     # training params
     env_name: str = "halfcheetah-medium-v2"
-    learning_rate: float = 3e-4
+    learning_rate: float = 1e-4
     betas: Tuple[float, float] = (0.9, 0.999)
     weight_decay: float = 1e-4
     clip_grad: Optional[float] = 0.25
@@ -56,7 +56,7 @@ class TrainConfig:
     deterministic_torch: bool = False
     train_seed: int = 10
     eval_seed: int = 42
-    device: str = "cpu"
+    device: str = "cuda"
 
     def __post_init__(self):
         self.name = f"{self.name}-{self.env_name}-{str(uuid.uuid4())[:8]}"
@@ -141,7 +141,7 @@ def load_d4rl_trajectories(
         data_["rewards"].append(dataset["rewards"][i])
 
         if dataset["terminals"][i] or dataset["timeouts"][i]:
-            episode_data = {k: np.array(v) for k, v in data_.items()}
+            episode_data = {k: np.array(v, dtype=np.float32) for k, v in data_.items()}
             # return-to-go if gamma=1.0, just discounted returns else
             episode_data["returns"] = discounted_cumsum(
                 episode_data["rewards"], gamma=gamma
@@ -176,9 +176,9 @@ class SequenceDataset(IterableDataset):
     def __prepare_sample(self, traj_idx, start_idx):
         traj = self.dataset[traj_idx]
         # https://github.com/kzl/decision-transformer/blob/e2d82e68f330c00f763507b3b01d774740bee53f/gym/experiment.py#L128 # noqa
-        states = traj["observations"][start_idx: start_idx + self.seq_len]
-        actions = traj["actions"][start_idx: start_idx + self.seq_len]
-        returns = traj["returns"][start_idx: start_idx + self.seq_len]
+        states = traj["observations"][start_idx : start_idx + self.seq_len]
+        actions = traj["actions"][start_idx : start_idx + self.seq_len]
+        returns = traj["returns"][start_idx : start_idx + self.seq_len]
         time_steps = np.arange(start_idx, start_idx + self.seq_len)
 
         states = (states - self.state_mean) / self.state_std
@@ -246,6 +246,8 @@ class TransformerBlock(nn.Module):
             key_padding_mask=padding_mask,
             need_weights=False,
         )[0]
+        # by default pytorch attention does not use dropout after final projection, while minGPT does:
+        # https://github.com/karpathy/minGPT/blob/7218bcfa527c65f164de791099de715b81a95106/mingpt/model.py#L70 # noqa
         x = x + self.drop(attention_out)
         x = x + self.mlp(self.norm2(x))
         return x
@@ -337,7 +339,8 @@ class DecisionTransformer(nn.Module):
                 .permute(0, 2, 1)
                 .reshape(batch_size, 3 * seq_len)
             )
-        # LayerNorm and Dropout as in original implementation
+        # LayerNorm and Dropout (!!!) as in original implementation,
+        # while minGPT & huggingface uses only embedding dropout
         out = self.emb_norm(sequence)
         out = self.emb_drop(out)
 
@@ -377,7 +380,7 @@ def eval_rollout(
     for step in range(model.episode_len):
         # first select history up to step, then select last seq_len states,
         # step + 1 as : operator is not inclusive, last action is dummy with zeros
-        # (as model will predict last, actual values are not important)
+        # (as model will predict last, actual last values are not important)
         predicted_actions = model(  # fix this noqa!!!
             states[:, : step + 1][:, -model.seq_len :],  # noqa
             actions[:, : step + 1][:, -model.seq_len :],  # noqa
