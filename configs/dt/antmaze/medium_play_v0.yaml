@@ -1,7 +1,7 @@
 group: "DT-antmaze-medium-play-v0-multiseed-v0"
 env_name: "antmaze-medium-play-v0"
 target_returns: [1.0, 0.5]
-eval_every: 5000
-learning_rate: 0.0008
-batch_size: 4096
+#eval_every: 5000
+#learning_rate: 0.0008
+#batch_size: 4096
 reward_scale: 1.0

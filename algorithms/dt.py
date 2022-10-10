@@ -246,7 +246,8 @@ class TransformerBlock(nn.Module):
             key_padding_mask=padding_mask,
             need_weights=False,
         )[0]
-        # by default pytorch attention does not use dropout after final projection, while minGPT does:
+        # by default pytorch attention does not use dropout
+        # after final attention weights projection, while minGPT does:
         # https://github.com/karpathy/minGPT/blob/7218bcfa527c65f164de791099de715b81a95106/mingpt/model.py#L70 # noqa
         x = x + self.drop(attention_out)
         x = x + self.mlp(self.norm2(x))
