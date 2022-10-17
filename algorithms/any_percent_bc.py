@@ -301,7 +301,7 @@ def train(config: TrainConfig):
 
     dataset = d4rl.qlearning_dataset(env)
 
-    keep_best_trajectories(dataset, config.frac, config.frac)
+    keep_best_trajectories(dataset, config.frac, config.discount)
 
     if config.normalize:
         state_mean, state_std = compute_mean_std(dataset["observations"], eps=1e-3)
