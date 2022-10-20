@@ -1,0 +1,6 @@
+project: "CORL"
+group: "edac-walker2d-medium-v2-multiseed-v2"
+name: "edac"
+env_name: "walker2d-medium-v2"
+num_critics: 10
+eta: 1.0

@@ -1,0 +1,7 @@
+project: "CORL"
+group: "edac-hopper-medium-expert-v2-multiseed-v2"
+name: "edac"
+env_name: "hopper-medium-expert-v2"
+num_critics: 50
+eta: 1.0
+buffer_size: 2000000

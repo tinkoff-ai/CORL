@@ -1,0 +1,6 @@
+project: "CORL"
+group: "edac-antmaze-medium-play-v0-multiseed-v0"
+name: "edac"
+env_name: "antmaze-medium-play-v0"
+num_critics: 10
+eta: 1.0

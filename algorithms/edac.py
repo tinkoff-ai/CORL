@@ -1,10 +1,6 @@
 # Inspired by:
 # 1. paper for SAC-N: https://arxiv.org/abs/2110.01548
 # 2. implementation: https://github.com/snu-mllab/EDAC
-
-# The only difference from the original implementation:
-# default pytorch weight initialization,
-# without custom rlkit init & uniform init for last layers.
 from typing import Any, Dict, List, Optional, Tuple, Union
 from copy import deepcopy
 from dataclasses import asdict, dataclass
@@ -29,7 +25,7 @@ class TrainConfig:
     # wandb params
     project: str = "CORL"
     group: str = "EDAC-D4RL"
-    name: str = "EDAC-N"
+    name: str = "EDAC"
     # model params
     hidden_dim: int = 256
     num_critics: int = 10
@@ -44,7 +40,7 @@ class TrainConfig:
     buffer_size: int = 1_000_000
     env_name: str = "halfcheetah-medium-v2"
     batch_size: int = 256
-    num_epochs: int = 250
+    num_epochs: int = 3000
     num_updates_on_epoch: int = 1000
     normalize_reward: bool = False
     # evaluation params

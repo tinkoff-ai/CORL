@@ -1,0 +1,6 @@
+project: "CORL"
+group: "edac-hopper-medium-v2-multiseed-v2"
+name: "edac"
+env_name: "hopper-medium-v2"
+num_critics: 50
+eta: 1.0
