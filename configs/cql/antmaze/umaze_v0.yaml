@@ -24,7 +24,7 @@ max_timesteps: 1000000
 n_episodes: 100
 name: CQL_antmaze-umaze-v0
 normalize: true
-normalize_reward: false
+normalize_reward: true
 orthogonal_init: true
 policy_lr: 3.0e-05
 project: CORL

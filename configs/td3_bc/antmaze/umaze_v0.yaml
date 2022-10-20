@@ -14,7 +14,7 @@ n_episodes: 100
 name: TD3_BC_antmaze-umaze-v0
 noise_clip: 0.5
 normalize: true
-normalize_reward: false
+normalize_reward: true
 policy_freq: 2
 policy_noise: 0.2
 project: CORL
