@@ -1,0 +1,6 @@
+project: "CORL"
+group: "edac-maze2d-umaze-v1-multiseed-v1"
+name: "edac"
+env_name: "maze2d-umaze-v1"
+num_critics: 10
+eta: 0.1

@@ -1,0 +1,7 @@
+project: "CORL"
+group: "edac-maze2d-medium-v1-multiseed-v1"
+name: "edac"
+env_name: "maze2d-medium-v1"
+num_critics: 10
+eta: 0.1
+buffer_size: 2000000

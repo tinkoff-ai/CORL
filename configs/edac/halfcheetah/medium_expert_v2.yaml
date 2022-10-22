@@ -1,0 +1,7 @@
+project: "CORL"
+group: "edac-halfcheetah-medium-expert-v2-multiseed-v2"
+name: "edac"
+env_name: "halfcheetah-medium-expert-v2"
+num_critics: 10
+eta: 5.0
+buffer_size: 2000000

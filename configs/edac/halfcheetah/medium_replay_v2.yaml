@@ -1,0 +1,6 @@
+project: "CORL"
+group: "edac-halfcheetah-medium-replay-v2-multiseed-v2"
+name: "edac"
+env_name: "halfcheetah-medium-replay-v2"
+num_critics: 10
+eta: 1.0
