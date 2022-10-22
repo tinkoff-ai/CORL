@@ -114,10 +114,12 @@ For learning curves and all the details, you can check the links above. Here, we
 
 If you use CORL in your work, please use the following bibtex
 ```bibtex
-@article{tarasov2022corl,
-  title={CORL: Research-oriented Deep Offline Reinforcement Learning Library},
-  author={Tarasov, Denis and Nikulin, Alexander and Akimov, Dmitry and Kurenkov, Vladislav and Kolesnikov, Sergey},
-  journal={arXiv preprint arXiv:2210.07105},
-  year={2022}
+@inproceedings{
+tarasov2022corl,
+title={{CORL}: Research-oriented Deep Offline Reinforcement Learning Library},
+author={Denis Tarasov and Alexander Nikulin and Dmitry Akimov and Vladislav Kurenkov and Sergey Kolesnikov},
+booktitle={3rd Offline RL Workshop: Offline RL as a ''Launchpad''},
+year={2022},
+url={https://openreview.net/forum?id=SyAS49bBcv}
 }
 ```
