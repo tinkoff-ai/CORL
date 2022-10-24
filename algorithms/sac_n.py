@@ -28,7 +28,7 @@ import wandb
 class TrainConfig:
     # wandb params
     project: str = "CORL"
-    group: str = "SAC-N-D4RL"
+    group: str = "SAC-N"
     name: str = "SAC-N"
     # model params
     hidden_dim: int = 256
@@ -43,7 +43,7 @@ class TrainConfig:
     buffer_size: int = 1_000_000
     env_name: str = "halfcheetah-medium-v2"
     batch_size: int = 256
-    num_epochs: int = 250
+    num_epochs: int = 3000
     num_updates_on_epoch: int = 1000
     normalize_reward: bool = False
     # evaluation params
