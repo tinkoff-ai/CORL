@@ -13,7 +13,6 @@ cql_min_q_weight: 10.0
 cql_n_actions: 10
 cql_target_action_gap: -1.0
 cql_temp: 1.0
-critic_layers: 3
 device: cuda
 discount: 0.99
 env: walker2d-medium-v2

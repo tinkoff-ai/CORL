@@ -1,7 +1,7 @@
 # source: https://github.com/young-geng/CQL/tree/934b0e8354ca431d6c083c4e3a29df88d4b0a24d
-# STRONG UNDER-PERFORMANCE. BUT IN IQL PAPER IT WORKS SOMEHOW
+# STRONG UNDER-PERFORMANCE ON PART OF ANTMAZE TASKS. BUT IN IQL PAPER IT WORKS SOMEHOW
 # https://arxiv.org/pdf/2006.04779.pdf
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 from copy import deepcopy
 from dataclasses import asdict, dataclass
 import os
@@ -44,7 +44,6 @@ class TrainConfig:
     qf_lr: bool = 3e-4  # Critics learning rate
     soft_target_update_rate: float = 5e-3  # Target network update rate
     bc_steps: int = int(0)  # Number of BC steps at start
-    critic_layers: int = 3  # Number of hidden layers in critic nets
     target_update_period: int = 1  # Frequency of target nets updates
     cql_n_actions: int = 10  # Number of sampled actions
     cql_importance_sample: bool = True  # Use importance sampling
@@ -235,64 +234,13 @@ def extend_and_repeat(tensor: torch.Tensor, dim: int, repeat: int) -> torch.Tens
     return tensor.unsqueeze(dim).repeat_interleave(repeat, dim=dim)
 
 
-def multiple_action_q_function(forward: Callable):
-    # Forward the q function with multiple actions on each state
-    def wrapped(self, observations, actions, **kwargs):
-        multiple_actions = False
-        batch_size = observations.shape[0]
-        if actions.ndim == 3 and observations.ndim == 2:
-            multiple_actions = True
-            observations = extend_and_repeat(observations, 1, actions.shape[1]).reshape(
-                -1, observations.shape[-1]
-            )
-            actions = actions.reshape(-1, actions.shape[-1])
-        q_values = forward(self, observations, actions, **kwargs)
-        if multiple_actions:
-            q_values = q_values.reshape(batch_size, -1)
-        return q_values
-
-    return wrapped
-
-
-class FullyConnectedNetwork(nn.Module):
-    def __init__(
-        self,
-        input_dim: int,
-        output_dim: int,
-        n_layers: int = 2,
-        orthogonal_init: bool = False,
-    ):
-        super().__init__()
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.orthogonal_init = orthogonal_init
-
-        d = input_dim
-        modules = []
-        hidden_sizes = [256] * n_layers
-
-        for hidden_size in hidden_sizes:
-            fc = nn.Linear(d, hidden_size)
-            if orthogonal_init:
-                nn.init.orthogonal_(fc.weight, gain=np.sqrt(2))
-                nn.init.constant_(fc.bias, 0.0)
-            modules.append(fc)
-            modules.append(nn.ReLU())
-            d = hidden_size
-
-        last_fc = nn.Linear(d, output_dim)
+def init_module_weights(module: torch.nn.Module, orthogonal_init: bool = False):
+    if isinstance(module, nn.Linear):
         if orthogonal_init:
-            nn.init.orthogonal_(last_fc.weight, gain=1e-2)
+            nn.init.orthogonal_(module.weight, gain=np.sqrt(2))
+            nn.init.constant_(module.bias, 0.0)
         else:
-            nn.init.xavier_uniform_(last_fc.weight, gain=1e-2)
-
-        nn.init.constant_(last_fc.bias, 0.0)
-        modules.append(last_fc)
-
-        self.network = nn.Sequential(*modules)
-
-    def forward(self, input_tensor: torch.Tensor):
-        return self.network(input_tensor)
+            nn.init.xavier_uniform_(module.weight, gain=1e-2)
 
 
 class ReparameterizedTanhGaussian(nn.Module):
@@ -358,9 +306,21 @@ class TanhGaussianPolicy(nn.Module):
         self.orthogonal_init = orthogonal_init
         self.no_tanh = no_tanh
 
-        self.base_network = FullyConnectedNetwork(
-            state_dim, 2 * action_dim, 2, orthogonal_init
+        self.base_network = nn.Sequential(
+            nn.Linear(state_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 2 * action_dim),
         )
+
+        if orthogonal_init:
+            self.base_network.apply(lambda m: init_module_weights(m, True))
+        else:
+            init_module_weights(self.base_network[-1], False)
+
         self.log_std_multiplier = Scalar(log_std_multiplier)
         self.log_std_offset = Scalar(log_std_offset)
         self.tanh_gaussian = ReparameterizedTanhGaussian(no_tanh=no_tanh)
@@ -402,21 +362,41 @@ class FullyConnectedQFunction(nn.Module):
         self,
         observation_dim: int,
         action_dim: int,
-        n_layers: int = 3,
         orthogonal_init: bool = False,
     ):
         super().__init__()
         self.observation_dim = observation_dim
         self.action_dim = action_dim
         self.orthogonal_init = orthogonal_init
-        self.network = FullyConnectedNetwork(
-            observation_dim + action_dim, 1, n_layers, orthogonal_init
-        )
 
-    @multiple_action_q_function
+        self.network = nn.Sequential(
+            nn.Linear(observation_dim + action_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 1),
+        )
+        if orthogonal_init:
+            self.network.apply(lambda m: init_module_weights(m, True))
+        else:
+            init_module_weights(self.network[-1], False)
+
     def forward(self, observations: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
+        multiple_actions = False
+        batch_size = observations.shape[0]
+        if actions.ndim == 3 and observations.ndim == 2:
+            multiple_actions = True
+            observations = extend_and_repeat(observations, 1, actions.shape[1]).reshape(
+                -1, observations.shape[-1]
+            )
+            actions = actions.reshape(-1, actions.shape[-1])
         input_tensor = torch.cat([observations, actions], dim=-1)
-        return torch.squeeze(self.network(input_tensor), dim=-1)
+        q_values = torch.squeeze(self.network(input_tensor), dim=-1)
+        if multiple_actions:
+            q_values = q_values.reshape(batch_size, -1)
+        return q_values
 
 
 class Scalar(nn.Module):
@@ -452,7 +432,7 @@ class ContinuousCQL:
         cql_lagrange: bool = False,
         cql_target_action_gap: float = -1.0,
         cql_temp: float = 1.0,
-        cql_min_q_weight: float = 10.0,
+        cql_min_q_weight: float = 5.0,
         cql_max_target_backup: bool = False,
         cql_clip_diff_min: float = -np.inf,
         cql_clip_diff_max: float = np.inf,
@@ -516,18 +496,7 @@ class ContinuousCQL:
         soft_update(self.target_critic_1, self.critic_1, soft_target_update_rate)
         soft_update(self.target_critic_2, self.critic_2, soft_target_update_rate)
 
-    def train(self, batch: TensorBatch) -> Dict[str, float]:
-        (
-            observations,
-            actions,
-            rewards,
-            next_observations,
-            dones,
-        ) = batch
-        self.total_it += 1
-
-        new_actions, log_pi = self.actor(observations)
-
+    def _alpha_and_alpha_loss(self, observations: torch.Tensor, log_pi: torch.Tensor):
         if self.use_automatic_entropy_tuning:
             alpha_loss = -(
                 self.log_alpha() * (log_pi + self.target_entropy).detach()
@@ -536,8 +505,16 @@ class ContinuousCQL:
         else:
             alpha_loss = observations.new_tensor(0.0)
             alpha = observations.new_tensor(self.alpha_multiplier)
+        return alpha, alpha_loss
 
-        """ Policy loss """
+    def _policy_loss(
+        self,
+        observations: torch.Tensor,
+        actions: torch.Tensor,
+        new_actions: torch.Tensor,
+        alpha: torch.Tensor,
+        log_pi: torch.Tensor,
+    ) -> torch.Tensor:
         if self.total_it <= self.bc_steps:
             log_probs = self.actor.log_prob(observations, actions)
             policy_loss = (alpha * log_pi - log_probs).mean()
@@ -547,8 +524,11 @@ class ContinuousCQL:
                 self.critic_2(observations, new_actions),
             )
             policy_loss = (alpha * log_pi - q_new_actions).mean()
+        return policy_loss
 
-        """ Q function loss """
+    def _q_loss(
+        self, observations, actions, next_observations, rewards, dones, alpha, log_dict
+    ):
         q1_predicted = self.critic_1(observations, actions)
         q2_predicted = self.critic_2(observations, actions)
 
@@ -691,34 +671,16 @@ class ContinuousCQL:
             alpha_prime = observations.new_tensor(0.0)
 
         qf_loss = qf1_loss + qf2_loss + cql_min_qf1_loss + cql_min_qf2_loss
-        if self.use_automatic_entropy_tuning:
-            self.alpha_optimizer.zero_grad()
-            alpha_loss.backward()
-            self.alpha_optimizer.step()
 
-        self.actor_optimizer.zero_grad()
-        policy_loss.backward()
-        self.actor_optimizer.step()
-
-        self.critic_1_optimizer.zero_grad()
-        self.critic_2_optimizer.zero_grad()
-        qf_loss.backward(retain_graph=True)
-        self.critic_1_optimizer.step()
-        self.critic_2_optimizer.step()
-
-        if self.total_it % self.target_update_period == 0:
-            self.update_target_network(self.soft_target_update_rate)
-
-        log_dict = dict(
-            log_pi=log_pi.mean().item(),
-            policy_loss=policy_loss.item(),
-            qf1_loss=qf1_loss.item(),
-            qf2_loss=qf2_loss.item(),
-            alpha_loss=alpha_loss.item(),
-            alpha=alpha.item(),
-            average_qf1=q1_predicted.mean().item(),
-            average_qf2=q2_predicted.mean().item(),
-            average_target_q=target_q_values.mean().item(),
+        log_dict.update(
+            dict(
+                qf1_loss=qf1_loss.item(),
+                qf2_loss=qf2_loss.item(),
+                alpha=alpha.item(),
+                average_qf1=q1_predicted.mean().item(),
+                average_qf2=q2_predicted.mean().item(),
+                average_target_q=target_q_values.mean().item(),
+            )
         )
 
         log_dict.update(
@@ -739,6 +701,57 @@ class ContinuousCQL:
                 alpha_prime=alpha_prime.item(),
             )
         )
+
+        return qf_loss, alpha_prime, alpha_prime_loss
+
+    def train(self, batch: TensorBatch) -> Dict[str, float]:
+        (
+            observations,
+            actions,
+            rewards,
+            next_observations,
+            dones,
+        ) = batch
+        self.total_it += 1
+
+        new_actions, log_pi = self.actor(observations)
+
+        alpha, alpha_loss = self._alpha_and_alpha_loss(observations, log_pi)
+
+        """ Policy loss """
+        policy_loss = self._policy_loss(
+            observations, actions, new_actions, alpha, log_pi
+        )
+
+        log_dict = dict(
+            log_pi=log_pi.mean().item(),
+            policy_loss=policy_loss.item(),
+            alpha_loss=alpha_loss.item(),
+            alpha=alpha.item(),
+        )
+
+        """ Q function loss """
+        qf_loss, alpha_prime, alpha_prime_loss = self._q_loss(
+            observations, actions, next_observations, rewards, dones, alpha, log_dict
+        )
+
+        if self.use_automatic_entropy_tuning:
+            self.alpha_optimizer.zero_grad()
+            alpha_loss.backward()
+            self.alpha_optimizer.step()
+
+        self.actor_optimizer.zero_grad()
+        policy_loss.backward()
+        self.actor_optimizer.step()
+
+        self.critic_1_optimizer.zero_grad()
+        self.critic_2_optimizer.zero_grad()
+        qf_loss.backward(retain_graph=True)
+        self.critic_1_optimizer.step()
+        self.critic_2_optimizer.step()
+
+        if self.total_it % self.target_update_period == 0:
+            self.update_target_network(self.soft_target_update_rate)
 
         return log_dict
 
@@ -831,12 +844,12 @@ def train(config: TrainConfig):
     seed = config.seed
     set_seed(seed, env)
 
-    critic_1 = FullyConnectedQFunction(
-        state_dim, action_dim, config.critic_layers, config.orthogonal_init
-    ).to(config.device)
-    critic_2 = FullyConnectedQFunction(
-        state_dim, action_dim, config.critic_layers, config.orthogonal_init
-    ).to(config.device)
+    critic_1 = FullyConnectedQFunction(state_dim, action_dim, config.orthogonal_init).to(
+        config.device
+    )
+    critic_2 = FullyConnectedQFunction(state_dim, action_dim, config.orthogonal_init).to(
+        config.device
+    )
     critic_1_optimizer = torch.optim.Adam(list(critic_1.parameters()), config.qf_lr)
     critic_2_optimizer = torch.optim.Adam(list(critic_2.parameters()), config.qf_lr)
 
