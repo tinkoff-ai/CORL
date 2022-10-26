@@ -20,7 +20,6 @@ TensorBatch = List[torch.Tensor]
 
 @dataclass
 class TrainConfig:
-    use_wandb: bool = True
     project: str = "CORL"
     group: str = "AWAC-D4RL"
     name: str = "AWAC"
@@ -47,7 +46,8 @@ class TrainConfig:
 
     def __post_init__(self):
         self.name = f"{self.name}-{self.env_name}-{str(uuid.uuid4())[:8]}"
-        self.checkpoints_path = f"./results/corl/{self.name}"
+        if self.checkpoints_path is not None:
+            self.checkpoints_path = os.path.join(self.checkpoints_path, self.name)
 
 
 class ReplayBuffer:
