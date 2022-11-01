@@ -23,7 +23,7 @@ class TrainConfig:
     project: str = "CORL"
     group: str = "AWAC-D4RL"
     name: str = "AWAC"
-    checkpoints_path: str = f"./results/corl/{name}"
+    checkpoints_path: Optional[str] = None
 
     env_name: str = "halfcheetah-medium-expert-v2"
     seed: int = 42
