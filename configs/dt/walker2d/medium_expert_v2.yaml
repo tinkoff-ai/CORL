@@ -14,7 +14,7 @@ episode_len: 1000
 eval_episodes: 100
 eval_every: 5000
 eval_seed: 42
-group: "DT-walker2d-medium-expert-v2-multiseed-v2"
+group: "dt-walker2d-medium-expert-v2-multiseed-v2"
 learning_rate: 0.0008
 max_action: 1.0
 name: "DT"

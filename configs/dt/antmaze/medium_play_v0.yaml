@@ -14,7 +14,7 @@ episode_len: 1000
 eval_episodes: 100
 eval_every: 10000
 eval_seed: 42
-group: "DT-antmaze-medium-play-v0-multiseed-v0"
+group: "dt-antmaze-medium-play-v0-multiseed-v0"
 learning_rate: 0.0001
 max_action: 1.0
 name: "DT"
