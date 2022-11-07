@@ -3,7 +3,7 @@ backup_entropy: false
 batch_size: 256
 bc_steps: 0
 buffer_size: 10000000
-checkpoints_path: ./models/cql
+checkpoints_path: null
 cql_clip_diff_max: .inf
 cql_clip_diff_min: -.inf
 cql_importance_sample: true
@@ -17,11 +17,11 @@ device: cuda
 discount: 0.99
 env: walker2d-random-v2
 eval_freq: 5000
-group: CQL-D4RL
+group: cql-walker2d-random-v2-multiseed-v0
 load_model: ''
 max_timesteps: 1000000
 n_episodes: 10
-name: CQL_walker2d-random-v2
+name: CQL
 normalize: true
 normalize_reward: false
 orthogonal_init: true
