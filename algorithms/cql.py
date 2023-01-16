@@ -40,8 +40,8 @@ class TrainConfig:
     alpha_multiplier: float = 1.0  # Multiplier for alpha in loss
     use_automatic_entropy_tuning: bool = True  # Tune entropy
     backup_entropy: bool = False  # Use backup entropy
-    policy_lr: bool = 3e-5  # Policy learning rate
-    qf_lr: bool = 3e-4  # Critics learning rate
+    policy_lr: float = 3e-5  # Policy learning rate
+    qf_lr: float = 3e-4  # Critics learning rate
     soft_target_update_rate: float = 5e-3  # Target network update rate
     bc_steps: int = int(0)  # Number of BC steps at start
     target_update_period: int = 1  # Frequency of target nets updates
@@ -932,10 +932,11 @@ def train(config: TrainConfig):
                 f"{eval_score:.3f} , D4RL score: {normalized_eval_score:.3f}"
             )
             print("---------------------------------------")
-            torch.save(
-                trainer.state_dict(),
-                os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"),
-            )
+            if config.checkpoints_path:
+                torch.save(
+                    trainer.state_dict(),
+                    os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"),
+                )
             wandb.log(
                 {"d4rl_normalized_score": normalized_eval_score},
                 step=trainer.total_it,
