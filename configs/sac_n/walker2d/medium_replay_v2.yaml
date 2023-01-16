@@ -6,12 +6,12 @@ checkpoints_path: null
 critic_learning_rate: 0.0003
 deterministic_torch: false
 device: cuda
-env_name: "hopper-medium-replay-v2"
+env_name: "walker2d-medium-replay-v2"
 eval_episodes: 10
 eval_every: 5
 eval_seed: 42
 gamma: 0.99
-group: "sac-n-hopper-medium-replay-v2-multiseed-v2"
+group: "sac-n-walker2d-medium-replay-v2-multiseed-v2"
 hidden_dim: 256
 log_every: 100
 max_action: 1.0
