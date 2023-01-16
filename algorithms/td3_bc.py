@@ -341,7 +341,6 @@ class TD3_BC:  # noqa
 
         # Delayed actor updates
         if self.total_it % self.policy_freq == 0:
-
             # Compute actor loss
             pi = self.actor(state)
             q = self.critic_1(state, pi)
