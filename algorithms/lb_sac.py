@@ -258,7 +258,12 @@ class Actor(nn.Module):
 
 class VectorizedCritic(nn.Module):
     def __init__(
-        self, state_dim: int, action_dim: int, hidden_dim: int, num_critics: int, layernorm: bool
+        self,
+        state_dim: int,
+        action_dim: int,
+        hidden_dim: int,
+        num_critics: int,
+        layernorm: bool,
     ):
         super().__init__()
         self.critic = nn.Sequential(
@@ -481,7 +486,11 @@ def train(config: TrainConfig):
     actor.to(config.device)
     actor_optimizer = torch.optim.Adam(actor.parameters(), lr=config.actor_learning_rate)
     critic = VectorizedCritic(
-        state_dim, action_dim, config.hidden_dim, config.num_critics, config.critic_layernorm
+        state_dim,
+        action_dim,
+        config.hidden_dim,
+        config.num_critics,
+        config.critic_layernorm,
     )
     critic.to(config.device)
     critic_optimizer = torch.optim.Adam(
