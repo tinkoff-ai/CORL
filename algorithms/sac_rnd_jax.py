@@ -1,32 +1,30 @@
 # Inspired by:
 # 1. paper for SAC-RND: https://arxiv.org/abs/2301.13616
 # 2. implementation: https://github.com/tinkoff-ai/sac-rnd
-
 # WARN: The ability to save checkpoints is not implemented (for simplicity).
 # For more check out flax docs: https://flax.readthedocs.io/en/latest/guides/use_checkpointing.html
-import wandb
-import uuid
-import pyrallis
 
-import jax
-import chex
-import distrax
-import optax
-import numpy as np
-import flax.linen as nn
-import jax.numpy as jnp
-import gym
-import d4rl
-
-import math
-from functools import partial
-from dataclasses import dataclass, asdict
-from flax.core import FrozenDict
-from typing import Dict, Tuple, Any, Callable, Sequence
-from tqdm.auto import trange
+from typing import Any, Callable, Dict, Sequence, Tuple
 from copy import deepcopy
+from dataclasses import asdict, dataclass
+from functools import partial
+import math
+import uuid
 
+import chex
+import d4rl
+import distrax
+from flax.core import FrozenDict
+import flax.linen as nn
 from flax.training.train_state import TrainState
+import gym
+import jax
+import jax.numpy as jnp
+import numpy as np
+import optax
+import pyrallis
+from tqdm.auto import trange
+import wandb
 
 
 @dataclass
@@ -74,7 +72,7 @@ def qlearning_dataset(env, dataset=None, terminate_on_end=False, **kwargs):
     if dataset is None:
         dataset = env.get_dataset(**kwargs)
 
-    N = dataset['rewards'].shape[0]
+    N = dataset["rewards"].shape[0]
     obs_ = []
     next_obs_ = []
     action_ = []
@@ -84,21 +82,21 @@ def qlearning_dataset(env, dataset=None, terminate_on_end=False, **kwargs):
 
     # The newer version of the dataset adds an explicit
     # timeouts field. Keep old method for backwards compatability.
-    use_timeouts = 'timeouts' in dataset
+    use_timeouts = "timeouts" in dataset
 
     episode_step = 0
     for i in range(N - 1):
-        obs = dataset['observations'][i].astype(np.float32)
-        new_obs = dataset['observations'][i + 1].astype(np.float32)
-        action = dataset['actions'][i].astype(np.float32)
-        new_action = dataset['actions'][i + 1].astype(np.float32)
-        reward = dataset['rewards'][i].astype(np.float32)
-        done_bool = bool(dataset['terminals'][i])
+        obs = dataset["observations"][i].astype(np.float32)
+        new_obs = dataset["observations"][i + 1].astype(np.float32)
+        action = dataset["actions"][i].astype(np.float32)
+        new_action = dataset["actions"][i + 1].astype(np.float32)
+        reward = dataset["rewards"][i].astype(np.float32)
+        done_bool = bool(dataset["terminals"][i])
 
         if use_timeouts:
-            final_timestep = dataset['timeouts'][i]
+            final_timestep = dataset["timeouts"][i]
         else:
-            final_timestep = (episode_step == env._max_episode_steps - 1)
+            final_timestep = episode_step == env._max_episode_steps - 1
         if (not terminate_on_end) and final_timestep:
             # Skip this transition and don't apply terminals on the last step of an episode
             episode_step = 0
@@ -115,12 +113,12 @@ def qlearning_dataset(env, dataset=None, terminate_on_end=False, **kwargs):
         episode_step += 1
 
     return {
-        'observations': np.array(obs_),
-        'actions': np.array(action_),
-        'next_observations': np.array(next_obs_),
-        'next_actions': np.array(next_action_),
-        'rewards': np.array(reward_),
-        'terminals': np.array(done_),
+        "observations": np.array(obs_),
+        "actions": np.array(action_),
+        "next_observations": np.array(next_obs_),
+        "next_actions": np.array(next_action_),
+        "rewards": np.array(reward_),
+        "terminals": np.array(done_),
     }
 
 
@@ -129,18 +127,24 @@ class ReplayBuffer:
     data: Dict[str, jax.Array]
 
     @staticmethod
-    def create_from_d4rl(dataset_name: str, normalize_reward: bool = False) -> "ReplayBuffer":
+    def create_from_d4rl(
+        dataset_name: str, normalize_reward: bool = False
+    ) -> "ReplayBuffer":
         d4rl_data = qlearning_dataset(gym.make(dataset_name))
         buffer = {
             "states": jnp.asarray(d4rl_data["observations"], dtype=jnp.float32),
             "actions": jnp.asarray(d4rl_data["actions"], dtype=jnp.float32),
             "rewards": jnp.asarray(d4rl_data["rewards"], dtype=jnp.float32),
-            "next_states": jnp.asarray(d4rl_data["next_observations"], dtype=jnp.float32),
+            "next_states": jnp.asarray(
+                d4rl_data["next_observations"], dtype=jnp.float32
+            ),
             "next_actions": jnp.asarray(d4rl_data["next_actions"], dtype=jnp.float32),
-            "dones": jnp.asarray(d4rl_data["terminals"], dtype=jnp.float32)
+            "dones": jnp.asarray(d4rl_data["terminals"], dtype=jnp.float32),
         }
         if normalize_reward:
-            buffer["rewards"] = ReplayBuffer.normalize_reward(dataset_name, buffer["rewards"])
+            buffer["rewards"] = ReplayBuffer.normalize_reward(
+                dataset_name, buffer["rewards"]
+            )
 
         return ReplayBuffer(data=buffer)
 
@@ -149,8 +153,12 @@ class ReplayBuffer:
         # WARN: do not use __len__ here! It will use len of the dataclass, i.e. number of fields.
         return self.data["states"].shape[0]
 
-    def sample_batch(self, key: jax.random.PRNGKey, batch_size: int) -> Dict[str, jax.Array]:
-        indices = jax.random.randint(key, shape=(batch_size,), minval=0, maxval=self.size)
+    def sample_batch(
+        self, key: jax.random.PRNGKey, batch_size: int
+    ) -> Dict[str, jax.Array]:
+        indices = jax.random.randint(
+            key, shape=(batch_size,), minval=0, maxval=self.size
+        )
         batch = jax.tree_map(lambda arr: arr[indices], self.data)
         return batch
 
@@ -164,7 +172,9 @@ class ReplayBuffer:
         if "antmaze" in dataset_name:
             return rewards * 100.0  # like in LAPO
         else:
-            raise NotImplementedError("Reward normalization is implemented only for AntMaze yet!")
+            raise NotImplementedError(
+                "Reward normalization is implemented only for AntMaze yet!"
+            )
 
 
 @chex.dataclass(frozen=True)
@@ -176,7 +186,7 @@ class RunningMeanStd:
         init_state = {
             "mean": jnp.array([0.0]),
             "var": jnp.array([0.0]),
-            "count": jnp.array([eps])
+            "count": jnp.array([eps]),
         }
         return RunningMeanStd(state=init_state)
 
@@ -186,7 +196,12 @@ class RunningMeanStd:
             batch_var = jnp.zeros_like(batch_mean)
 
         new_mean, new_var, new_count = self._update_mean_var_count_from_moments(
-            self.state["mean"], self.state["var"], self.state["count"], batch_mean, batch_var, batch_count
+            self.state["mean"],
+            self.state["var"],
+            self.state["count"],
+            batch_mean,
+            batch_var,
+            batch_count,
         )
         return self.replace(state={"mean": new_mean, "var": new_var, "count": new_count})
 
@@ -237,7 +252,9 @@ class Metrics:
         return {k: float(v[0] / v[1]) for k, v in self.accumulators.items()}
 
 
-def normalize(arr: jax.Array, mean: jax.Array, std: jax.Array, eps: float = 1e-8) -> jax.Array:
+def normalize(
+    arr: jax.Array, mean: jax.Array, std: jax.Array, eps: float = 1e-8
+) -> jax.Array:
     return (arr - mean) / (std + eps)
 
 
@@ -247,14 +264,21 @@ def pytorch_init(fan_in: float):
     https://pytorch.org/docs/stable/generated/torch.nn.Linear.html
     """
     bound = math.sqrt(1 / fan_in)
+
     def _init(key, shape, dtype):
-        return jax.random.uniform(key, shape=shape, minval=-bound, maxval=bound, dtype=dtype)
+        return jax.random.uniform(
+            key, shape=shape, minval=-bound, maxval=bound, dtype=dtype
+        )
+
     return _init
 
 
 def uniform_init(bound: float):
     def _init(key, shape, dtype):
-        return jax.random.uniform(key, shape=shape, minval=-bound, maxval=bound, dtype=dtype)
+        return jax.random.uniform(
+            key, shape=shape, minval=-bound, maxval=bound, dtype=dtype
+        )
+
     return _init
 
 
@@ -267,6 +291,7 @@ class TorchBilinearDense(nn.Module):
     Implementation of the Bilinear layer as in PyTorch:
     https://pytorch.org/docs/stable/generated/torch.nn.Bilinear.html#torch.nn.Bilinear
     """
+
     out_dim: int
     kernel_init: Callable = nn.initializers.lecun_normal()
     bias_init: Callable = nn.initializers.zeros
@@ -274,9 +299,12 @@ class TorchBilinearDense(nn.Module):
     @nn.compact
     def __call__(self, x, z):
         kernel = self.param(
-            'kernel', self.kernel_init, (self.out_dim, x.shape[-1], z.shape[-1]), jnp.float32
+            "kernel",
+            self.kernel_init,
+            (self.out_dim, x.shape[-1], z.shape[-1]),
+            jnp.float32,
         )
-        bias = self.param('bias', self.bias_init, (self.out_dim, 1), jnp.float32)
+        bias = self.param("bias", self.bias_init, (self.out_dim, 1), jnp.float32)
         # with same init and inputs this expression gives all True in torch.isclose for torch.nn.Bilinear
         out = ((x.T * (kernel @ z.T)).sum(1) + bias).T
         return out
@@ -289,17 +317,31 @@ class BilinearFirstMLP(nn.Module):
     @nn.compact
     def __call__(self, feature, context):
         f_d, c_d, h_d = feature.shape[-1], context.shape[-1], self.hidden_dim
-        bilinear = TorchBilinearDense(self.hidden_dim, kernel_init=pytorch_init(f_d), bias_init=pytorch_init(f_d))
-        combined_emb = nn.Sequential([
-            nn.Dense(self.hidden_dim, kernel_init=pytorch_init(h_d), bias_init=pytorch_init(h_d)),
-            nn.relu,
-            nn.Dense(self.hidden_dim, kernel_init=pytorch_init(h_d), bias_init=pytorch_init(h_d)),
-            nn.relu,
-            nn.Dense(self.out_dim, kernel_init=pytorch_init(h_d), bias_init=pytorch_init(h_d))
-        ])
-        out = combined_emb(
-            nn.relu(bilinear(feature, context))
+        bilinear = TorchBilinearDense(
+            self.hidden_dim, kernel_init=pytorch_init(f_d), bias_init=pytorch_init(f_d)
         )
+        combined_emb = nn.Sequential(
+            [
+                nn.Dense(
+                    self.hidden_dim,
+                    kernel_init=pytorch_init(h_d),
+                    bias_init=pytorch_init(h_d),
+                ),
+                nn.relu,
+                nn.Dense(
+                    self.hidden_dim,
+                    kernel_init=pytorch_init(h_d),
+                    bias_init=pytorch_init(h_d),
+                ),
+                nn.relu,
+                nn.Dense(
+                    self.out_dim,
+                    kernel_init=pytorch_init(h_d),
+                    bias_init=pytorch_init(h_d),
+                ),
+            ]
+        )
+        out = combined_emb(nn.relu(bilinear(feature, context)))
         return out
 
 
@@ -310,11 +352,23 @@ class FilmLastMLP(nn.Module):
     @nn.compact
     def __call__(self, feature, context):
         f_d, c_d, h_d = feature.shape[-1], context.shape[-1], self.hidden_dim
-        film = nn.Dense(2 * self.hidden_dim, kernel_init=pytorch_init(c_d), bias_init=pytorch_init(c_d))
-        linear1 = nn.Dense(self.hidden_dim, kernel_init=pytorch_init(f_d), bias_init=pytorch_init(f_d))
-        linear2 = nn.Dense(self.hidden_dim, kernel_init=pytorch_init(h_d), bias_init=pytorch_init(h_d))
-        linear3 = nn.Dense(self.hidden_dim, kernel_init=pytorch_init(h_d), bias_init=pytorch_init(h_d))
-        linear4 = nn.Dense(self.out_dim, kernel_init=pytorch_init(h_d), bias_init=pytorch_init(h_d))
+        film = nn.Dense(
+            2 * self.hidden_dim,
+            kernel_init=pytorch_init(c_d),
+            bias_init=pytorch_init(c_d),
+        )
+        linear1 = nn.Dense(
+            self.hidden_dim, kernel_init=pytorch_init(f_d), bias_init=pytorch_init(f_d)
+        )
+        linear2 = nn.Dense(
+            self.hidden_dim, kernel_init=pytorch_init(h_d), bias_init=pytorch_init(h_d)
+        )
+        linear3 = nn.Dense(
+            self.hidden_dim, kernel_init=pytorch_init(h_d), bias_init=pytorch_init(h_d)
+        )
+        linear4 = nn.Dense(
+            self.out_dim, kernel_init=pytorch_init(h_d), bias_init=pytorch_init(h_d)
+        )
 
         gamma, beta = jnp.split(film(context), 2, axis=-1)
         out = nn.relu(linear1(feature))
@@ -364,16 +418,34 @@ class Actor(nn.Module):
     def __call__(self, state):
         s_d, h_d = state.shape[-1], self.hidden_dim
         # Initialization as in the EDAC paper
-        net = nn.Sequential([
-            nn.Dense(self.hidden_dim, kernel_init=pytorch_init(s_d), bias_init=nn.initializers.constant(0.1)),
-            nn.relu,
-            nn.Dense(self.hidden_dim, kernel_init=pytorch_init(h_d), bias_init=nn.initializers.constant(0.1)),
-            nn.relu,
-            nn.Dense(self.hidden_dim, kernel_init=pytorch_init(h_d), bias_init=nn.initializers.constant(0.1)),
-            nn.relu,
-        ])
-        log_sigma_net = nn.Dense(self.action_dim, kernel_init=uniform_init(1e-3), bias_init=uniform_init(1e-3))
-        mu_net = nn.Dense(self.action_dim, kernel_init=uniform_init(1e-3), bias_init=uniform_init(1e-3))
+        net = nn.Sequential(
+            [
+                nn.Dense(
+                    self.hidden_dim,
+                    kernel_init=pytorch_init(s_d),
+                    bias_init=nn.initializers.constant(0.1),
+                ),
+                nn.relu,
+                nn.Dense(
+                    self.hidden_dim,
+                    kernel_init=pytorch_init(h_d),
+                    bias_init=nn.initializers.constant(0.1),
+                ),
+                nn.relu,
+                nn.Dense(
+                    self.hidden_dim,
+                    kernel_init=pytorch_init(h_d),
+                    bias_init=nn.initializers.constant(0.1),
+                ),
+                nn.relu,
+            ]
+        )
+        log_sigma_net = nn.Dense(
+            self.action_dim, kernel_init=uniform_init(1e-3), bias_init=uniform_init(1e-3)
+        )
+        mu_net = nn.Dense(
+            self.action_dim, kernel_init=uniform_init(1e-3), bias_init=uniform_init(1e-3)
+        )
 
         trunk = net(state)
         mu, log_sigma = mu_net(trunk), log_sigma_net(trunk)
@@ -392,18 +464,34 @@ class Critic(nn.Module):
     def __call__(self, state, action):
         s_d, a_d, h_d = state.shape[-1], action.shape[-1], self.hidden_dim
         # Initialization as in the EDAC paper
-        network = nn.Sequential([
-            nn.Dense(self.hidden_dim, kernel_init=pytorch_init(s_d + a_d), bias_init=nn.initializers.constant(0.1)),
-            nn.relu,
-            nn.LayerNorm() if self.layernorm else identity,
-            nn.Dense(self.hidden_dim, kernel_init=pytorch_init(h_d), bias_init=nn.initializers.constant(0.1)),
-            nn.relu,
-            nn.LayerNorm() if self.layernorm else identity,
-            nn.Dense(self.hidden_dim, kernel_init=pytorch_init(h_d), bias_init=nn.initializers.constant(0.1)),
-            nn.relu,
-            nn.LayerNorm() if self.layernorm else identity,
-            nn.Dense(1, kernel_init=uniform_init(3e-3), bias_init=uniform_init(3e-3))
-        ])
+        network = nn.Sequential(
+            [
+                nn.Dense(
+                    self.hidden_dim,
+                    kernel_init=pytorch_init(s_d + a_d),
+                    bias_init=nn.initializers.constant(0.1),
+                ),
+                nn.relu,
+                nn.LayerNorm() if self.layernorm else identity,
+                nn.Dense(
+                    self.hidden_dim,
+                    kernel_init=pytorch_init(h_d),
+                    bias_init=nn.initializers.constant(0.1),
+                ),
+                nn.relu,
+                nn.LayerNorm() if self.layernorm else identity,
+                nn.Dense(
+                    self.hidden_dim,
+                    kernel_init=pytorch_init(h_d),
+                    bias_init=nn.initializers.constant(0.1),
+                ),
+                nn.relu,
+                nn.LayerNorm() if self.layernorm else identity,
+                nn.Dense(
+                    1, kernel_init=uniform_init(3e-3), bias_init=uniform_init(3e-3)
+                ),
+            ]
+        )
         state_action = jnp.hstack([state, action])
         out = network(state_action).squeeze(-1)
         return out
@@ -422,7 +510,7 @@ class EnsembleCritic(nn.Module):
             out_axes=0,
             variable_axes={"params": 0},
             split_rngs={"params": True},
-            axis_size=self.num_critics
+            axis_size=self.num_critics,
         )
         q_values = ensemble(self.hidden_dim, self.layernorm)(state, action)
         return q_values
@@ -433,7 +521,9 @@ class Alpha(nn.Module):
 
     @nn.compact
     def __call__(self):
-        log_alpha = self.param("log_alpha", lambda key: jnp.array([jnp.log(self.init_value)]))
+        log_alpha = self.param(
+            "log_alpha", lambda key: jnp.array([jnp.log(self.init_value)])
+        )
         return jnp.exp(log_alpha)
 
 
@@ -446,11 +536,7 @@ class CriticTrainState(TrainState):
     target_params: FrozenDict
 
 
-def rnd_bonus(
-        rnd: RNDTrainState,
-        state: jax.Array,
-        action: jax.Array
-) -> jax.Array:
+def rnd_bonus(rnd: RNDTrainState, state: jax.Array, action: jax.Array) -> jax.Array:
     pred, target = rnd.apply_fn(rnd.params, state, action)
     # [batch_size, embedding_dim]
     bonus = jnp.sum((pred - target) ** 2, axis=1) / rnd.rms.std
@@ -458,10 +544,10 @@ def rnd_bonus(
 
 
 def update_rnd(
-        key: jax.random.PRNGKey,
-        rnd: RNDTrainState,
-        batch: Dict[str, jax.Array],
-        metrics: Metrics
+    key: jax.random.PRNGKey,
+    rnd: RNDTrainState,
+    batch: Dict[str, jax.Array],
+    metrics: Metrics,
 ) -> Tuple[jax.random.PRNGKey, RNDTrainState, Metrics]:
     def rnd_loss_fn(params):
         pred, target = rnd.apply_fn(params, batch["states"], batch["actions"])
@@ -476,25 +562,29 @@ def update_rnd(
 
     # log rnd bonus for random actions
     key, actions_key = jax.random.split(key)
-    random_actions = jax.random.uniform(actions_key, shape=batch["actions"].shape, minval=-1.0, maxval=1.0)
-    new_metrics = metrics.update({
-        "rnd_loss": loss,
-        "rnd_rms": new_rnd.rms.std,
-        "rnd_data": loss / rnd.rms.std,
-        "rnd_random": rnd_bonus(rnd, batch["states"], random_actions).mean()
-    })
+    random_actions = jax.random.uniform(
+        actions_key, shape=batch["actions"].shape, minval=-1.0, maxval=1.0
+    )
+    new_metrics = metrics.update(
+        {
+            "rnd_loss": loss,
+            "rnd_rms": new_rnd.rms.std,
+            "rnd_data": loss / rnd.rms.std,
+            "rnd_random": rnd_bonus(rnd, batch["states"], random_actions).mean(),
+        }
+    )
     return key, new_rnd, new_metrics
 
 
 def update_actor(
-        key: jax.random.PRNGKey,
-        actor: TrainState,
-        rnd: RNDTrainState,
-        critic: TrainState,
-        alpha: TrainState,
-        batch: Dict[str, jax.Array],
-        beta: float,
-        metrics: Metrics
+    key: jax.random.PRNGKey,
+    actor: TrainState,
+    rnd: RNDTrainState,
+    critic: TrainState,
+    alpha: TrainState,
+    batch: Dict[str, jax.Array],
+    beta: float,
+    metrics: Metrics,
 ) -> Tuple[jax.random.PRNGKey, TrainState, jax.Array, Metrics]:
     key, actions_key, random_action_key = jax.random.split(key, 3)
 
@@ -504,40 +594,44 @@ def update_actor(
 
         rnd_penalty = rnd_bonus(rnd, batch["states"], actions)
         q_values = critic.apply_fn(critic.params, batch["states"], actions).min(0)
-        loss = (alpha.apply_fn(alpha.params) * actions_logp.sum(-1) + beta * rnd_penalty - q_values).mean()
+        loss = (
+            alpha.apply_fn(alpha.params) * actions_logp.sum(-1)
+            + beta * rnd_penalty
+            - q_values
+        ).mean()
 
         # logging stuff
         actor_entropy = -actions_logp.sum(-1).mean()
-        random_actions = jax.random.uniform(random_action_key, shape=batch["actions"].shape, minval=-1.0, maxval=1.0)
-        new_metrics = metrics.update({
-            "batch_entropy": actor_entropy,
-            "actor_loss": loss,
-            "rnd_policy": rnd_penalty.mean(),
-            "rnd_random": rnd_bonus(rnd, batch["states"], random_actions).mean(),
-            "action_mse": ((actions - batch["actions"]) ** 2).mean()
-        })
+        random_actions = jax.random.uniform(
+            random_action_key, shape=batch["actions"].shape, minval=-1.0, maxval=1.0
+        )
+        new_metrics = metrics.update(
+            {
+                "batch_entropy": actor_entropy,
+                "actor_loss": loss,
+                "rnd_policy": rnd_penalty.mean(),
+                "rnd_random": rnd_bonus(rnd, batch["states"], random_actions).mean(),
+                "action_mse": ((actions - batch["actions"]) ** 2).mean(),
+            }
+        )
         return loss, (actor_entropy, new_metrics)
 
-    grads, (actor_entropy, new_metrics) = jax.grad(actor_loss_fn, has_aux=True)(actor.params)
+    grads, (actor_entropy, new_metrics) = jax.grad(actor_loss_fn, has_aux=True)(
+        actor.params
+    )
     new_actor = actor.apply_gradients(grads=grads)
 
     return key, new_actor, actor_entropy, new_metrics
 
 
 def update_alpha(
-        alpha: TrainState,
-        entropy: jax.Array,
-        target_entropy: float,
-        metrics: Metrics
+    alpha: TrainState, entropy: jax.Array, target_entropy: float, metrics: Metrics
 ) -> Tuple[TrainState, Metrics]:
     def alpha_loss_fn(params):
         alpha_value = alpha.apply_fn(params)
         loss = (alpha_value * (entropy - target_entropy)).mean()
 
-        new_metrics = metrics.update({
-            "alpha": alpha_value,
-            "alpha_loss": loss
-        })
+        new_metrics = metrics.update({"alpha": alpha_value, "alpha_loss": loss})
         return loss, new_metrics
 
     grads, new_metrics = jax.grad(alpha_loss_fn, has_aux=True)(alpha.params)
@@ -547,25 +641,33 @@ def update_alpha(
 
 
 def update_critic(
-        key: jax.random.PRNGKey,
-        actor: TrainState,
-        rnd: RNDTrainState,
-        critic: CriticTrainState,
-        alpha: TrainState,
-        batch: Dict[str, jax.Array],
-        gamma: float,
-        beta: float,
-        tau: float,
-        metrics: Metrics
+    key: jax.random.PRNGKey,
+    actor: TrainState,
+    rnd: RNDTrainState,
+    critic: CriticTrainState,
+    alpha: TrainState,
+    batch: Dict[str, jax.Array],
+    gamma: float,
+    beta: float,
+    tau: float,
+    metrics: Metrics,
 ) -> Tuple[jax.random.PRNGKey, TrainState, Metrics]:
     key, actions_key = jax.random.split(key)
 
     next_actions_dist = actor.apply_fn(actor.params, batch["next_states"])
-    next_actions, next_actions_logp = next_actions_dist.sample_and_log_prob(seed=actions_key)
+    next_actions, next_actions_logp = next_actions_dist.sample_and_log_prob(
+        seed=actions_key
+    )
     rnd_penalty = rnd_bonus(rnd, batch["next_states"], next_actions)
 
-    next_q = critic.apply_fn(critic.target_params, batch["next_states"], next_actions).min(0)
-    next_q = next_q - alpha.apply_fn(alpha.params) * next_actions_logp.sum(-1) - beta * rnd_penalty
+    next_q = critic.apply_fn(
+        critic.target_params, batch["next_states"], next_actions
+    ).min(0)
+    next_q = (
+        next_q
+        - alpha.apply_fn(alpha.params) * next_actions_logp.sum(-1)
+        - beta * rnd_penalty
+    )
 
     target_q = batch["rewards"] + (1 - batch["dones"]) * gamma * next_q
 
@@ -576,34 +678,44 @@ def update_critic(
         loss = ((q - target_q[None, ...]) ** 2).mean(1).sum(0)
         return loss, q_min
 
-    (loss, q_min), grads = jax.value_and_grad(critic_loss_fn, has_aux=True)(critic.params)
+    (loss, q_min), grads = jax.value_and_grad(critic_loss_fn, has_aux=True)(
+        critic.params
+    )
     new_critic = critic.apply_gradients(grads=grads)
     new_critic = new_critic.replace(
-        target_params=optax.incremental_update(new_critic.params, new_critic.target_params, tau)
+        target_params=optax.incremental_update(
+            new_critic.params, new_critic.target_params, tau
+        )
     )
-    new_metrics = metrics.update({
-        "critic_loss": loss,
-        "q_min": q_min,
-    })
+    new_metrics = metrics.update(
+        {
+            "critic_loss": loss,
+            "q_min": q_min,
+        }
+    )
     return key, new_critic, new_metrics
 
 
 def update_sac(
-        key: jax.random.PRNGKey,
-        rnd: RNDTrainState,
-        actor: TrainState,
-        critic: CriticTrainState,
-        alpha: TrainState,
-        batch: Dict[str, Any],
-        target_entropy: float,
-        gamma: float,
-        actor_beta: float,
-        critic_beta: float,
-        tau: float,
-        metrics: Metrics,
+    key: jax.random.PRNGKey,
+    rnd: RNDTrainState,
+    actor: TrainState,
+    critic: CriticTrainState,
+    alpha: TrainState,
+    batch: Dict[str, Any],
+    target_entropy: float,
+    gamma: float,
+    actor_beta: float,
+    critic_beta: float,
+    tau: float,
+    metrics: Metrics,
 ):
-    key, new_actor, actor_entropy, new_metrics = update_actor(key, actor, rnd, critic, alpha, batch, actor_beta, metrics)
-    new_alpha, new_metrics = update_alpha(alpha, actor_entropy, target_entropy, new_metrics)
+    key, new_actor, actor_entropy, new_metrics = update_actor(
+        key, actor, rnd, critic, alpha, batch, actor_beta, metrics
+    )
+    new_alpha, new_metrics = update_alpha(
+        alpha, actor_entropy, target_entropy, new_metrics
+    )
     key, new_critic, new_metrics = update_critic(
         key, new_actor, rnd, critic, alpha, batch, gamma, critic_beta, tau, new_metrics
     )
@@ -617,10 +729,13 @@ def action_fn(actor: TrainState) -> Callable:
         dist = actor.apply_fn(actor.params, obs)
         action = dist.mean()
         return action
+
     return _action_fn
 
 
-def evaluate(env: gym.Env, action_fn: Callable, num_episodes: int, seed: int) -> np.ndarray:
+def evaluate(
+    env: gym.Env, action_fn: Callable, num_episodes: int, seed: int
+) -> np.ndarray:
     env.seed(seed)
 
     returns = []
@@ -671,7 +786,7 @@ def train(config: Config):
         apply_fn=rnd_module.apply,
         params=rnd_module.init(rnd_key, init_state, init_action),
         tx=optax.adam(learning_rate=config.rnd_learning_rate),
-        rms=RunningMeanStd.create()
+        rms=RunningMeanStd.create(),
     )
     actor_module = Actor(action_dim=init_action.shape[-1], hidden_dim=config.hidden_dim)
     actor = TrainState.create(
@@ -683,10 +798,12 @@ def train(config: Config):
     alpha = TrainState.create(
         apply_fn=alpha_module.apply,
         params=alpha_module.init(alpha_key),
-        tx=optax.adam(learning_rate=config.alpha_learning_rate)
+        tx=optax.adam(learning_rate=config.alpha_learning_rate),
     )
     critic_module = EnsembleCritic(
-        hidden_dim=config.hidden_dim, num_critics=config.num_critics, layernorm=config.critic_layernorm
+        hidden_dim=config.hidden_dim,
+        num_critics=config.num_critics,
+        layernorm=config.critic_layernorm,
     )
     critic = CriticTrainState.create(
         apply_fn=critic_module.apply,
@@ -696,18 +813,22 @@ def train(config: Config):
     )
 
     update_sac_partial = partial(
-        update_sac, target_entropy=target_entropy, gamma=config.gamma,
-        actor_beta=config.actor_beta, critic_beta=config.critic_beta, tau=config.tau
+        update_sac,
+        target_entropy=target_entropy,
+        gamma=config.gamma,
+        actor_beta=config.actor_beta,
+        critic_beta=config.critic_beta,
+        tau=config.tau,
     )
 
     def rnd_loop_update_step(i, carry):
         key, batch_key = jax.random.split(carry["key"])
         batch = carry["buffer"].sample_batch(batch_key, batch_size=config.batch_size)
 
-        key, new_rnd, new_metrics = update_rnd(key, carry["rnd"], batch, carry["metrics"])
-        carry.update(
-            key=key, rnd=new_rnd, metrics=new_metrics
+        key, new_rnd, new_metrics = update_rnd(
+            key, carry["rnd"], batch, carry["metrics"]
         )
+        carry.update(key=key, rnd=new_rnd, metrics=new_metrics)
         return carry
 
     def sac_loop_update_step(i, carry):
@@ -721,20 +842,29 @@ def train(config: Config):
             critic=carry["critic"],
             alpha=carry["alpha"],
             batch=batch,
-            metrics=carry["metrics"]
+            metrics=carry["metrics"],
         )
         carry.update(
-            key=key, actor=new_actor, critic=new_critic, alpha=new_alpha, metrics=new_metrics
+            key=key,
+            actor=new_actor,
+            critic=new_critic,
+            alpha=new_alpha,
+            metrics=new_metrics,
         )
         return carry
 
     # metrics
-    rnd_metrics_to_log = [
-        "rnd_loss", "rnd_rms", "rnd_data", "rnd_random"
-    ]
+    rnd_metrics_to_log = ["rnd_loss", "rnd_rms", "rnd_data", "rnd_random"]
     bc_metrics_to_log = [
-        "critic_loss", "q_min", "actor_loss", "batch_entropy",
-        "rnd_policy", "rnd_random", "action_mse", "alpha_loss", "alpha"
+        "critic_loss",
+        "q_min",
+        "actor_loss",
+        "batch_entropy",
+        "rnd_policy",
+        "rnd_random",
+        "action_mse",
+        "alpha_loss",
+        "alpha",
     ]
     # shared carry for update loops
     update_carry = {
@@ -753,7 +883,7 @@ def train(config: Config):
             lower=0,
             upper=config.num_updates_on_epoch,
             body_fun=rnd_loop_update_step,
-            init_val=update_carry
+            init_val=update_carry,
         )
         # log mean over epoch for each metric
         mean_metrics = update_carry["metrics"].compute()
@@ -767,7 +897,7 @@ def train(config: Config):
             lower=0,
             upper=config.num_updates_on_epoch,
             body_fun=sac_loop_update_step,
-            init_val=update_carry
+            init_val=update_carry,
         )
         # log mean over epoch for each metric
         mean_metrics = update_carry["metrics"].compute()
@@ -776,15 +906,19 @@ def train(config: Config):
         if epoch % config.eval_every == 0 or epoch == config.num_epochs - 1:
             actor_action_fn = action_fn(actor=update_carry["actor"])
 
-            eval_returns = evaluate(eval_env, actor_action_fn, config.eval_episodes, seed=config.eval_seed)
+            eval_returns = evaluate(
+                eval_env, actor_action_fn, config.eval_episodes, seed=config.eval_seed
+            )
             normalized_score = eval_env.get_normalized_score(eval_returns) * 100.0
-            wandb.log({
-                "epoch": epoch,
-                "eval/return_mean": np.mean(eval_returns),
-                "eval/return_std": np.std(eval_returns),
-                "eval/normalized_score_mean": np.mean(normalized_score),
-                "eval/normalized_score_std": np.std(normalized_score)
-            })
+            wandb.log(
+                {
+                    "epoch": epoch,
+                    "eval/return_mean": np.mean(eval_returns),
+                    "eval/return_std": np.std(eval_returns),
+                    "eval/normalized_score_mean": np.mean(normalized_score),
+                    "eval/normalized_score_std": np.std(normalized_score),
+                }
+            )
 
     wandb.finish()
 
