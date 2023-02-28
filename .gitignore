@@ -1,6 +1,8 @@
 # Internal stuff
 benchmark.py
 mlc_run.sh
+wandb_run.sh
+sweep_config.yaml
 .ml-job-preset.yml
 wandb
 

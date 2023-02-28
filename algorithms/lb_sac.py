@@ -37,6 +37,7 @@ class TrainConfig:
     critic_learning_rate: float = 0.0018
     alpha_learning_rate: float = 0.0018
     critic_layernorm: bool = False
+    edac_init: bool = False
     max_action: float = 1.0
     # training params
     buffer_size: int = 1_000_000
@@ -77,6 +78,7 @@ def wandb_init(config: dict) -> None:
         group=config["group"],
         name=config["name"],
         id=str(uuid.uuid4()),
+        save_code=True
     )
     wandb.run.save()
 
@@ -204,7 +206,12 @@ class VectorizedLinear(nn.Module):
 
 class Actor(nn.Module):
     def __init__(
-        self, state_dim: int, action_dim: int, hidden_dim: int, max_action: float = 1.0
+        self,
+        state_dim: int,
+        action_dim: int,
+        hidden_dim: int,
+        edac_init: bool,
+        max_action: float = 1.0,
     ):
         super().__init__()
         self.trunk = nn.Sequential(
@@ -218,6 +225,16 @@ class Actor(nn.Module):
         # with separate layers works better than with Linear(hidden_dim, 2 * action_dim)
         self.mu = nn.Linear(hidden_dim, action_dim)
         self.log_sigma = nn.Linear(hidden_dim, action_dim)
+
+        if edac_init:
+            # init as in the EDAC paper
+            for layer in self.trunk[::2]:
+                torch.nn.init.constant_(layer.bias, 0.1)
+
+            torch.nn.init.uniform_(self.mu.weight, -1e-3, 1e-3)
+            torch.nn.init.uniform_(self.mu.bias, -1e-3, 1e-3)
+            torch.nn.init.uniform_(self.log_sigma.weight, -1e-3, 1e-3)
+            torch.nn.init.uniform_(self.log_sigma.bias, -1e-3, 1e-3)
 
         self.action_dim = action_dim
         self.max_action = max_action
@@ -264,6 +281,7 @@ class VectorizedCritic(nn.Module):
         hidden_dim: int,
         num_critics: int,
         layernorm: bool,
+        edac_init: bool,
     ):
         super().__init__()
         self.critic = nn.Sequential(
@@ -278,6 +296,14 @@ class VectorizedCritic(nn.Module):
             nn.ReLU(),
             VectorizedLinear(hidden_dim, 1, num_critics),
         )
+        if edac_init:
+            # init as in the EDAC paper
+            for layer in self.critic[::3]:
+                torch.nn.init.constant_(layer.bias, 0.1)
+
+            torch.nn.init.uniform_(self.critic[-1].weight, -3e-3, 3e-3)
+            torch.nn.init.uniform_(self.critic[-1].bias, -3e-3, 3e-3)
+
         self.num_critics = num_critics
 
     def forward(self, state: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
@@ -367,7 +393,8 @@ class LBSAC:
 
         q_values = self.critic(state, action)
         # [ensemble_size, batch_size] - [1, batch_size]
-        loss = ((q_values - q_target.view(1, -1)) ** 2).mean(dim=1).sum(dim=0)
+        # loss = ((q_values - q_target.view(1, -1)) ** 2).mean(dim=1).sum(dim=0)
+        loss = ((q_values - q_target.view(1, -1)) ** 2).mean()
 
         return loss
 
@@ -482,7 +509,7 @@ def train(config: TrainConfig):
     buffer.load_d4rl_dataset(d4rl_dataset)
 
     # Actor & Critic setup
-    actor = Actor(state_dim, action_dim, config.hidden_dim, config.max_action)
+    actor = Actor(state_dim, action_dim, config.hidden_dim, config.edac_init, config.max_action)
     actor.to(config.device)
     actor_optimizer = torch.optim.Adam(actor.parameters(), lr=config.actor_learning_rate)
     critic = VectorizedCritic(
@@ -491,6 +518,7 @@ def train(config: TrainConfig):
         config.hidden_dim,
         config.num_critics,
         config.critic_layernorm,
+        config.edac_init,
     )
     critic.to(config.device)
     critic_optimizer = torch.optim.Adam(
