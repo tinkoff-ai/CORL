@@ -19,8 +19,8 @@ log_every: 100
 max_action: 1.0
 name: "LB-SAC"
 num_critics: 30
-num_epochs: 200
+num_epochs: 350
 num_updates_on_epoch: 1000
 project: "CORL"
-tau: 0.0005
+tau: 0.005
 train_seed: 10
