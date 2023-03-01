@@ -78,7 +78,7 @@ def wandb_init(config: dict) -> None:
         group=config["group"],
         name=config["name"],
         id=str(uuid.uuid4()),
-        save_code=True
+        save_code=True,
     )
     wandb.run.save()
 
