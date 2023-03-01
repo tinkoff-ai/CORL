@@ -509,7 +509,9 @@ def train(config: TrainConfig):
     buffer.load_d4rl_dataset(d4rl_dataset)
 
     # Actor & Critic setup
-    actor = Actor(state_dim, action_dim, config.hidden_dim, config.edac_init, config.max_action)
+    actor = Actor(
+        state_dim, action_dim, config.hidden_dim, config.edac_init, config.max_action
+    )
     actor.to(config.device)
     actor_optimizer = torch.optim.Adam(actor.parameters(), lr=config.actor_learning_rate)
     critic = VectorizedCritic(
