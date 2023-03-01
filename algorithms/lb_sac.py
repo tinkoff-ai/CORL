@@ -1,6 +1,6 @@
 # Inspired by:
-# 1. paper for SAC-N: https://arxiv.org/abs/2110.01548
-# 2. implementation: https://github.com/snu-mllab/EDAC
+# 1. paper for LB-SAC: https://arxiv.org/abs/2211.11092
+# 2. implementation: https://github.com/tinkoff-ai/lb-sac
 from typing import Any, Dict, List, Optional, Tuple, Union
 from copy import deepcopy
 from dataclasses import asdict, dataclass
@@ -20,28 +20,31 @@ from tqdm import trange
 import wandb
 
 
+# base batch size: 256
+# base learning rate: 3e-4
 @dataclass
 class TrainConfig:
     # wandb params
     project: str = "CORL"
-    group: str = "SAC-N"
-    name: str = "SAC-N"
+    group: str = "LB-SAC"
+    name: str = "LB-SAC"
     # model params
     hidden_dim: int = 256
     num_critics: int = 10
     gamma: float = 0.99
     tau: float = 5e-3
-    actor_learning_rate: float = 3e-4
-    critic_learning_rate: float = 3e-4
-    alpha_learning_rate: float = 3e-4
+    actor_learning_rate: float = 0.0018
+    critic_learning_rate: float = 0.0018
+    alpha_learning_rate: float = 0.0018
+    critic_layernorm: bool = False
+    edac_init: bool = False
     max_action: float = 1.0
     # training params
     buffer_size: int = 1_000_000
     env_name: str = "halfcheetah-medium-v2"
-    batch_size: int = 256
-    num_epochs: int = 3000
+    batch_size: int = 10_000
+    num_epochs: int = 300
     num_updates_on_epoch: int = 1000
-    normalize_reward: bool = False
     # evaluation params
     eval_episodes: int = 10
     eval_every: int = 5
@@ -75,6 +78,7 @@ def wandb_init(config: dict) -> None:
         group=config["group"],
         name=config["name"],
         id=str(uuid.uuid4()),
+        save_code=True,
     )
     wandb.run.save()
 
@@ -202,7 +206,12 @@ class VectorizedLinear(nn.Module):
 
 class Actor(nn.Module):
     def __init__(
-        self, state_dim: int, action_dim: int, hidden_dim: int, max_action: float = 1.0
+        self,
+        state_dim: int,
+        action_dim: int,
+        hidden_dim: int,
+        edac_init: bool,
+        max_action: float = 1.0,
     ):
         super().__init__()
         self.trunk = nn.Sequential(
@@ -217,14 +226,15 @@ class Actor(nn.Module):
         self.mu = nn.Linear(hidden_dim, action_dim)
         self.log_sigma = nn.Linear(hidden_dim, action_dim)
 
-        # init as in the EDAC paper
-        for layer in self.trunk[::2]:
-            torch.nn.init.constant_(layer.bias, 0.1)
+        if edac_init:
+            # init as in the EDAC paper
+            for layer in self.trunk[::2]:
+                torch.nn.init.constant_(layer.bias, 0.1)
 
-        torch.nn.init.uniform_(self.mu.weight, -1e-3, 1e-3)
-        torch.nn.init.uniform_(self.mu.bias, -1e-3, 1e-3)
-        torch.nn.init.uniform_(self.log_sigma.weight, -1e-3, 1e-3)
-        torch.nn.init.uniform_(self.log_sigma.bias, -1e-3, 1e-3)
+            torch.nn.init.uniform_(self.mu.weight, -1e-3, 1e-3)
+            torch.nn.init.uniform_(self.mu.bias, -1e-3, 1e-3)
+            torch.nn.init.uniform_(self.log_sigma.weight, -1e-3, 1e-3)
+            torch.nn.init.uniform_(self.log_sigma.bias, -1e-3, 1e-3)
 
         self.action_dim = action_dim
         self.max_action = max_action
@@ -265,24 +275,34 @@ class Actor(nn.Module):
 
 class VectorizedCritic(nn.Module):
     def __init__(
-        self, state_dim: int, action_dim: int, hidden_dim: int, num_critics: int
+        self,
+        state_dim: int,
+        action_dim: int,
+        hidden_dim: int,
+        num_critics: int,
+        layernorm: bool,
+        edac_init: bool,
     ):
         super().__init__()
         self.critic = nn.Sequential(
             VectorizedLinear(state_dim + action_dim, hidden_dim, num_critics),
+            nn.LayerNorm(hidden_dim) if layernorm else nn.Identity(),
             nn.ReLU(),
             VectorizedLinear(hidden_dim, hidden_dim, num_critics),
+            nn.LayerNorm(hidden_dim) if layernorm else nn.Identity(),
             nn.ReLU(),
             VectorizedLinear(hidden_dim, hidden_dim, num_critics),
+            nn.LayerNorm(hidden_dim) if layernorm else nn.Identity(),
             nn.ReLU(),
             VectorizedLinear(hidden_dim, 1, num_critics),
         )
-        # init as in the EDAC paper
-        for layer in self.critic[::2]:
-            torch.nn.init.constant_(layer.bias, 0.1)
+        if edac_init:
+            # init as in the EDAC paper
+            for layer in self.critic[::3]:
+                torch.nn.init.constant_(layer.bias, 0.1)
 
-        torch.nn.init.uniform_(self.critic[-1].weight, -3e-3, 3e-3)
-        torch.nn.init.uniform_(self.critic[-1].bias, -3e-3, 3e-3)
+            torch.nn.init.uniform_(self.critic[-1].weight, -3e-3, 3e-3)
+            torch.nn.init.uniform_(self.critic[-1].bias, -3e-3, 3e-3)
 
         self.num_critics = num_critics
 
@@ -298,7 +318,7 @@ class VectorizedCritic(nn.Module):
         return q_values
 
 
-class SACN:
+class LBSAC:
     def __init__(
         self,
         actor: Actor,
@@ -373,7 +393,8 @@ class SACN:
 
         q_values = self.critic(state, action)
         # [ensemble_size, batch_size] - [1, batch_size]
-        loss = ((q_values - q_target.view(1, -1)) ** 2).mean(dim=1).sum(dim=0)
+        # loss = ((q_values - q_target.view(1, -1)) ** 2).mean(dim=1).sum(dim=0)
+        loss = ((q_values - q_target.view(1, -1)) ** 2).mean()
 
         return loss
 
@@ -466,30 +487,6 @@ def eval_actor(
     return np.array(episode_rewards)
 
 
-def return_reward_range(dataset, max_episode_steps):
-    returns, lengths = [], []
-    ep_ret, ep_len = 0.0, 0
-    for r, d in zip(dataset["rewards"], dataset["terminals"]):
-        ep_ret += float(r)
-        ep_len += 1
-        if d or ep_len == max_episode_steps:
-            returns.append(ep_ret)
-            lengths.append(ep_len)
-            ep_ret, ep_len = 0.0, 0
-    lengths.append(ep_len)  # but still keep track of number of steps
-    assert sum(lengths) == len(dataset["rewards"])
-    return min(returns), max(returns)
-
-
-def modify_reward(dataset, env_name, max_episode_steps=1000):
-    if any(s in env_name for s in ("halfcheetah", "hopper", "walker2d")):
-        min_ret, max_ret = return_reward_range(dataset, max_episode_steps)
-        dataset["rewards"] /= max_ret - min_ret
-        dataset["rewards"] *= max_episode_steps
-    elif "antmaze" in env_name:
-        dataset["rewards"] -= 1.0
-
-
 @pyrallis.wrap()
 def train(config: TrainConfig):
     set_seed(config.train_seed, deterministic_torch=config.deterministic_torch)
@@ -501,9 +498,7 @@ def train(config: TrainConfig):
     action_dim = eval_env.action_space.shape[0]
 
     d4rl_dataset = d4rl.qlearning_dataset(eval_env)
-
-    if config.normalize_reward:
-        modify_reward(d4rl_dataset, config.env_name)
+    print("Buffer size: ", d4rl_dataset["actions"].shape[0])
 
     buffer = ReplayBuffer(
         state_dim=state_dim,
@@ -514,18 +509,25 @@ def train(config: TrainConfig):
     buffer.load_d4rl_dataset(d4rl_dataset)
 
     # Actor & Critic setup
-    actor = Actor(state_dim, action_dim, config.hidden_dim, config.max_action)
+    actor = Actor(
+        state_dim, action_dim, config.hidden_dim, config.edac_init, config.max_action
+    )
     actor.to(config.device)
     actor_optimizer = torch.optim.Adam(actor.parameters(), lr=config.actor_learning_rate)
     critic = VectorizedCritic(
-        state_dim, action_dim, config.hidden_dim, config.num_critics
+        state_dim,
+        action_dim,
+        config.hidden_dim,
+        config.num_critics,
+        config.critic_layernorm,
+        config.edac_init,
     )
     critic.to(config.device)
     critic_optimizer = torch.optim.Adam(
         critic.parameters(), lr=config.critic_learning_rate
     )
 
-    trainer = SACN(
+    trainer = LBSAC(
         actor=actor,
         actor_optimizer=actor_optimizer,
         critic=critic,
