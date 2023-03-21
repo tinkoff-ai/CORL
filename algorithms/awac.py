@@ -28,7 +28,7 @@ class TrainConfig:
     env_name: str = "halfcheetah-medium-expert-v2"
     seed: int = 42
     test_seed: int = 69
-    deterministic_torch: bool = True
+    deterministic_torch: bool = False
     device: str = "cuda"
 
     buffer_size: int = 2_000_000
@@ -454,7 +454,6 @@ def train(config: TrainConfig):
         with open(os.path.join(config.checkpoints_path, "config.yaml"), "w") as f:
             pyrallis.dump(config, f)
 
-    full_eval_scores, full_normalized_eval_scores = [], []
     for t in trange(config.num_train_ops, ncols=80):
         batch = replay_buffer.sample(config.batch_size)
         batch = [b.to(config.device) for b in batch]
@@ -464,29 +463,19 @@ def train(config: TrainConfig):
             eval_scores = eval_actor(
                 env, actor, config.device, config.n_test_episodes, config.test_seed
             )
-            full_eval_scores.append(eval_scores)
+
             wandb.log({"eval_score": eval_scores.mean()}, step=t)
             if hasattr(env, "get_normalized_score"):
                 normalized_eval_scores = env.get_normalized_score(eval_scores) * 100.0
-                full_normalized_eval_scores.append(normalized_eval_scores)
                 wandb.log(
                     {"normalized_eval_score": normalized_eval_scores.mean()}, step=t
                 )
-            torch.save(
-                awac.state_dict(),
-                os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"),
-            )
 
-    with open(os.path.join(config.checkpoints_path, "/eval_scores.npy"), "wb") as f:
-        # noinspection PyTypeChecker
-        np.save(f, np.asarray(full_eval_scores))
-
-    if len(full_normalized_eval_scores) > 0:
-        with open(
-            os.path.join(config.checkpoints_path, "/normalized_eval_scores.npy"), "wb"
-        ) as f:
-            # noinspection PyTypeChecker
-            np.save(f, np.asarray(full_normalized_eval_scores))
+            if config.checkpoints_path is not None:
+                torch.save(
+                    awac.state_dict(),
+                    os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"),
+                )
 
     wandb.finish()
 
