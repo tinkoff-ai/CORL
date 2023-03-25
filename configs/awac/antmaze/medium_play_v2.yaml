@@ -4,10 +4,10 @@ buffer_size: 10000000
 checkpoints_path: null
 deterministic_torch: false
 device: cuda
-env_name: antmaze-medium-play-v0
+env_name: antmaze-medium-play-v2
 eval_frequency: 1000
 gamma: 0.99
-group: awac-antmaze-medium-play-v0-multiseed-v0
+group: awac-antmaze-medium-play-v2-multiseed-v0
 hidden_dim: 256
 learning_rate: 0.0003
 n_test_episodes: 100
