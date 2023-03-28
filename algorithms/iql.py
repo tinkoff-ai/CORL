@@ -13,7 +13,7 @@ import gym
 import numpy as np
 import pyrallis
 import torch
-from torch.distributions import MultivariateNormal
+from torch.distributions import Normal
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -23,7 +23,7 @@ TensorBatch = List[torch.Tensor]
 
 
 EXP_ADV_MAX = 100.0
-LOG_STD_MIN = -5.0
+LOG_STD_MIN = -20.0
 LOG_STD_MAX = 2.0
 
 
@@ -36,7 +36,7 @@ class TrainConfig:
     eval_freq: int = int(5e3)  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
     max_timesteps: int = int(1e6)  # Max time steps to run environment
-    checkpoints_path: Optional[str] = None  # Save path
+    checkpoints_path: str = "./models/iql"  # Save path
     load_model: str = ""  # Model load file name, "" doesn't load
     # IQL
     buffer_size: int = 2_000_000  # Replay buffer size
@@ -52,11 +52,6 @@ class TrainConfig:
     project: str = "CORL"
     group: str = "IQL-D4RL"
     name: str = "IQL"
-
-    def __post_init__(self):
-        self.name = f"{self.name}-{self.env}-{str(uuid.uuid4())[:8]}"
-        if self.checkpoints_path is not None:
-            self.checkpoints_path = os.path.join(self.checkpoints_path, self.name)
 
 
 def soft_update(target: nn.Module, source: nn.Module, tau: float):
@@ -279,15 +274,14 @@ class GaussianPolicy(nn.Module):
         n_hidden: int = 2,
     ):
         super().__init__()
-        self.net = MLP([state_dim, *([hidden_dim] * n_hidden), act_dim])
+        self.net = MLP([state_dim, *([hidden_dim] * n_hidden), act_dim], output_activation_fn=nn.Tanh)
         self.log_std = nn.Parameter(torch.zeros(act_dim, dtype=torch.float32))
         self.max_action = max_action
 
-    def forward(self, obs: torch.Tensor) -> MultivariateNormal:
+    def forward(self, obs: torch.Tensor) -> Normal:
         mean = self.net(obs)
         std = torch.exp(self.log_std.clamp(LOG_STD_MIN, LOG_STD_MAX))
-        scale_tril = torch.diag(std)
-        return MultivariateNormal(mean, scale_tril=scale_tril)
+        return Normal(mean, std)
 
     @torch.no_grad()
     def act(self, state: np.ndarray, device: str = "cpu"):
@@ -394,13 +388,14 @@ class ImplicitQLearning:
     def _update_v(self, observations, actions, log_dict) -> torch.Tensor:
         # Update value function
         with torch.no_grad():
-            target_q = self.q_target(observations, actions)
+            q1, q2 = self.q_target.both(observations, actions)
+            target_q = torch.minimum(q1, q2)
 
         v = self.vf(observations)
         adv = target_q - v
         v_loss = asymmetric_l2_loss(adv, self.iql_tau)
         log_dict["value_loss"] = v_loss.item()
-        self.v_optimizer.zero_grad(set_to_none=True)
+        self.v_optimizer.zero_grad()
         v_loss.backward()
         self.v_optimizer.step()
         return adv
@@ -415,10 +410,10 @@ class ImplicitQLearning:
         log_dict,
     ):
         targets = rewards + (1.0 - terminals.float()) * self.discount * next_v.detach()
-        qs = self.qf.both(observations, actions)
-        q_loss = sum(F.mse_loss(q, targets) for q in qs) / len(qs)
+        q1, q2 = self.qf.both(observations, actions)
+        q_loss = (F.mse_loss(q1, targets) + F.mse_loss(q2, targets)) / 2
         log_dict["q_loss"] = q_loss.item()
-        self.q_optimizer.zero_grad(set_to_none=True)
+        self.q_optimizer.zero_grad()
         q_loss.backward()
         self.q_optimizer.step()
 
@@ -429,7 +424,7 @@ class ImplicitQLearning:
         exp_adv = torch.exp(self.beta * adv.detach()).clamp(max=EXP_ADV_MAX)
         policy_out = self.actor(observations)
         if isinstance(policy_out, torch.distributions.Distribution):
-            bc_losses = -policy_out.log_prob(actions)
+            bc_losses = -policy_out.log_prob(actions).sum(-1, keepdim=False)
         elif torch.is_tensor(policy_out):
             if policy_out.shape != actions.shape:
                 raise RuntimeError("Actions shape missmatch")
@@ -438,7 +433,7 @@ class ImplicitQLearning:
             raise NotImplementedError
         policy_loss = torch.mean(exp_adv * bc_losses)
         log_dict["actor_loss"] = policy_loss.item()
-        self.actor_optimizer.zero_grad(set_to_none=True)
+        self.actor_optimizer.zero_grad()
         policy_loss.backward()
         self.actor_optimizer.step()
         self.actor_lr_schedule.step()
@@ -605,11 +600,10 @@ def train(config: TrainConfig):
                 f"{eval_score:.3f} , D4RL score: {normalized_eval_score:.3f}"
             )
             print("---------------------------------------")
-            if config.checkpoints_path is not None:
-                torch.save(
-                    trainer.state_dict(),
-                    os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"),
-                )
+            torch.save(
+                trainer.state_dict(),
+                os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"),
+            )
             wandb.log(
                 {"d4rl_normalized_score": normalized_eval_score}, step=trainer.total_it
             )
