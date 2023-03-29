@@ -274,7 +274,10 @@ class GaussianPolicy(nn.Module):
         n_hidden: int = 2,
     ):
         super().__init__()
-        self.net = MLP([state_dim, *([hidden_dim] * n_hidden), act_dim], output_activation_fn=nn.Tanh)
+        self.net = MLP(
+            [state_dim, *([hidden_dim] * n_hidden), act_dim],
+            output_activation_fn=nn.Tanh,
+        )
         self.log_std = nn.Parameter(torch.zeros(act_dim, dtype=torch.float32))
         self.max_action = max_action
 
