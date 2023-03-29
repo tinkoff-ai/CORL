@@ -280,7 +280,7 @@ class GaussianPolicy(nn.Module):
     ):
         super().__init__()
         self.net = MLP(
-            [state_dim, *([hidden_dim] * n_hidden), act_dim], 
+            [state_dim, *([hidden_dim] * n_hidden), act_dim],
             output_activation_fn=nn.Tanh,
         )
         self.log_std = nn.Parameter(torch.zeros(act_dim, dtype=torch.float32))
