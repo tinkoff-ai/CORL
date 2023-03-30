@@ -396,8 +396,7 @@ class ImplicitQLearning:
     def _update_v(self, observations, actions, log_dict) -> torch.Tensor:
         # Update value function
         with torch.no_grad():
-            q1, q2 = self.q_target.both(observations, actions)
-            target_q = torch.minimum(q1, q2)
+            target_q = self.q_target(observations, actions)
 
         v = self.vf(observations)
         adv = target_q - v
@@ -418,8 +417,8 @@ class ImplicitQLearning:
         log_dict,
     ):
         targets = rewards + (1.0 - terminals.float()) * self.discount * next_v.detach()
-        q1, q2 = self.qf.both(observations, actions)
-        q_loss = (F.mse_loss(q1, targets) + F.mse_loss(q2, targets)) / 2
+        qs = self.qf.both(observations, actions)
+        q_loss = sum(F.mse_loss(q, targets) for q in qs) / len(qs)
         log_dict["q_loss"] = q_loss.item()
         self.q_optimizer.zero_grad()
         q_loss.backward()
