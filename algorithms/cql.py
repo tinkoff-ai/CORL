@@ -33,6 +33,7 @@ class TrainConfig:
     max_timesteps: int = int(1e6)  # Max time steps to run environment
     checkpoints_path: Optional[str] = None  # Save path
     load_model: str = ""  # Model load file name, "" doesn't load
+
     # CQL
     buffer_size: int = 2_000_000  # Replay buffer size
     batch_size: int = 256  # Batch size for all networks
@@ -43,7 +44,6 @@ class TrainConfig:
     policy_lr: float = 3e-5  # Policy learning rate
     qf_lr: float = 3e-4  # Critics learning rate
     soft_target_update_rate: float = 5e-3  # Target network update rate
-    bc_steps: int = int(0)  # Number of BC steps at start
     target_update_period: int = 1  # Frequency of target nets updates
     cql_n_actions: int = 10  # Number of sampled actions
     cql_importance_sample: bool = True  # Use importance sampling
@@ -57,6 +57,13 @@ class TrainConfig:
     orthogonal_init: bool = True  # Orthogonal initialization
     normalize: bool = True  # Normalize states
     normalize_reward: bool = False  # Normalize reward
+
+    # AntMaze hacks
+    bc_steps: int = int(0)  # Number of BC steps at start
+    reward_scale: float = 5.0
+    reward_bias: float = -1.0
+    policy_log_std_multiplier: float = 1.0
+
     # Wandb logging
     project: str = "CORL"
     group: str = "CQL-D4RL"
@@ -226,26 +233,35 @@ def return_reward_range(dataset, max_episode_steps):
     return min(returns), max(returns)
 
 
-def modify_reward(dataset, env_name, max_episode_steps=1000):
+def modify_reward(dataset, env_name, bias, scale, max_episode_steps=1000):
     if any(s in env_name for s in ("halfcheetah", "hopper", "walker2d")):
         min_ret, max_ret = return_reward_range(dataset, max_episode_steps)
         dataset["rewards"] /= max_ret - min_ret
         dataset["rewards"] *= max_episode_steps
     elif "antmaze" in env_name:
-        dataset["rewards"] -= 1.0
+        dataset["rewards"] = dataset["rewards"] * scale + bias
 
 
 def extend_and_repeat(tensor: torch.Tensor, dim: int, repeat: int) -> torch.Tensor:
     return tensor.unsqueeze(dim).repeat_interleave(repeat, dim=dim)
 
 
-def init_module_weights(module: torch.nn.Module, orthogonal_init: bool = False):
-    if isinstance(module, nn.Linear):
-        if orthogonal_init:
-            nn.init.orthogonal_(module.weight, gain=np.sqrt(2))
-            nn.init.constant_(module.bias, 0.0)
-        else:
-            nn.init.xavier_uniform_(module.weight, gain=1e-2)
+def init_module_weights(module: torch.nn.Sequential, orthogonal_init: bool = False):
+    # Specific orthgonal initialization for inner layers
+    # If orthogonal init is off, we do not change default initialization
+    if orthogonal_init:
+        for submodule in module[:-1]:
+            if isinstance(submodule, nn.Linear):
+                nn.init.orthogonal_(submodule.weight, gain=np.sqrt(2))
+                nn.init.constant_(submodule.bias, 0.0)
+
+    # Lasy layers should be initialzied differently as well
+    if orthogonal_init:
+        nn.init.orthogonal_(module[-1].weight, gain=1e-2)
+    else:
+        nn.init.xavier_uniform_(module[-1].weight, gain=1e-2)
+
+    nn.init.constant_(module[-1].bias, 0.0)
 
 
 class ReparameterizedTanhGaussian(nn.Module):
@@ -321,10 +337,7 @@ class TanhGaussianPolicy(nn.Module):
             nn.Linear(256, 2 * action_dim),
         )
 
-        if orthogonal_init:
-            self.base_network.apply(lambda m: init_module_weights(m, True))
-        else:
-            init_module_weights(self.base_network[-1], False)
+        init_module_weights(self.base_network)
 
         self.log_std_multiplier = Scalar(log_std_multiplier)
         self.log_std_offset = Scalar(log_std_offset)
@@ -383,10 +396,8 @@ class FullyConnectedQFunction(nn.Module):
             nn.ReLU(),
             nn.Linear(256, 1),
         )
-        if orthogonal_init:
-            self.network.apply(lambda m: init_module_weights(m, True))
-        else:
-            init_module_weights(self.network[-1], False)
+
+        init_module_weights(self.network)
 
     def forward(self, observations: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
         multiple_actions = False
@@ -815,7 +826,9 @@ def train(config: TrainConfig):
     dataset = d4rl.qlearning_dataset(env)
 
     if config.normalize_reward:
-        modify_reward(dataset, config.env)
+        modify_reward(
+            dataset, config.env, bias=config.reward_bias, scale=config.reward_bias
+        )
 
     if config.normalize:
         state_mean, state_std = compute_mean_std(dataset["observations"], eps=1e-3)
@@ -859,7 +872,11 @@ def train(config: TrainConfig):
     critic_2_optimizer = torch.optim.Adam(list(critic_2.parameters()), config.qf_lr)
 
     actor = TanhGaussianPolicy(
-        state_dim, action_dim, max_action, orthogonal_init=config.orthogonal_init
+        state_dim,
+        action_dim,
+        max_action,
+        log_std_multiplier=config.policy_log_std_multiplier,
+        orthogonal_init=config.orthogonal_init,
     ).to(config.device)
     actor_optimizer = torch.optim.Adam(actor.parameters(), config.policy_lr)
 
