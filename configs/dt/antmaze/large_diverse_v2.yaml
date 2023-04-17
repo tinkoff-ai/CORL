@@ -1,0 +1,33 @@
+attention_dropout: 0.1
+batch_size: 64
+betas:
+- 0.9
+- 0.999
+checkpoints_path: null
+clip_grad: 0.25
+deterministic_torch: false
+device: cuda
+embedding_dim: 128
+embedding_dropout: 0.1
+env_name: "antmaze-large-diverse-v2"
+episode_len: 1000
+eval_episodes: 100
+eval_every: 10000
+eval_seed: 42
+group: "dt-antmaze-large-diverse-v2-multiseed-v0"
+learning_rate: 0.0001
+max_action: 1.0
+name: "DT"
+num_heads: 1
+num_layers: 3
+num_workers: 4
+project: "CORL"
+residual_dropout: 0.1
+reward_scale: 1.0
+seq_len: 20
+target_returns: [1.0, 0.5, 0.25, 0.125, 0.06, 0.03]
+train_seed: 10
+update_steps: 100000
+warmup_steps: 10000
+weight_decay: 0.0001
+
