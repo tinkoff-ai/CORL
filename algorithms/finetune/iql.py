@@ -702,7 +702,7 @@ def train(config: TrainConfig):
                 )
             wandb.log(
                 {"eval/d4rl_normalized_score": normalized_eval_score},
-                step=trainer.total_it
+                step=trainer.total_it,
             )
 
 
