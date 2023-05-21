@@ -232,7 +232,7 @@ def modify_reward(dataset, env_name, max_episode_steps=1000):
         dataset["rewards"] /= max_ret - min_ret
         dataset["rewards"] *= max_episode_steps
     elif "antmaze" in env_name:
-        dataset["rewards"] -= 1.0
+        dataset["rewards"] = dataset["rewards"] * 10.0 - 5.0
 
 
 def extend_and_repeat(tensor: torch.Tensor, dim: int, repeat: int) -> torch.Tensor:
@@ -338,7 +338,8 @@ class TanhGaussianPolicy(nn.Module):
         base_network_output = self.base_network(observations)
         mean, log_std = torch.split(base_network_output, self.action_dim, dim=-1)
         log_std = self.log_std_multiplier() * log_std + self.log_std_offset()
-        return self.tanh_gaussian.log_prob(mean, log_std, actions)
+        _, log_probs = self.tanh_gaussian(mean, log_std, False)
+        return log_probs
 
     def forward(
         self,
@@ -376,6 +377,10 @@ class FullyConnectedQFunction(nn.Module):
 
         self.network = nn.Sequential(
             nn.Linear(observation_dim + action_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -562,7 +567,7 @@ class ContinuousCQL:
             target_q_values = target_q_values - alpha * next_log_pi
 
         target_q_values = target_q_values.unsqueeze(-1)
-        td_target = rewards + (1.0 - dones) * self.discount * target_q_values
+        td_target = rewards + (1.0 - dones) * self.discount * target_q_values.detach()
         td_target = td_target.squeeze(-1)
         qf1_loss = F.mse_loss(q1_predicted, td_target.detach())
         qf2_loss = F.mse_loss(q2_predicted, td_target.detach())
