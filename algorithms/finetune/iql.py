@@ -241,7 +241,7 @@ def modify_reward(dataset, env_name, max_episode_steps=1000):
         return {
             "max_ret": max_ret,
             "min_ret": min_ret,
-            "max_episode_steps": max_episode_steps
+            "max_episode_steps": max_episode_steps,
         }
     elif "antmaze" in env_name:
         dataset["rewards"] -= 1.0
@@ -587,9 +587,13 @@ def train(config: TrainConfig):
     q_network = TwinQ(state_dim, action_dim).to(config.device)
     v_network = ValueFunction(state_dim).to(config.device)
     actor = (
-        DeterministicPolicy(state_dim, action_dim, max_action, dropout=config.actor_dropout)
+        DeterministicPolicy(
+            state_dim, action_dim, max_action, dropout=config.actor_dropout
+        )
         if config.iql_deterministic
-        else GaussianPolicy(state_dim, action_dim, max_action, dropout=config.actor_dropout)
+        else GaussianPolicy(
+            state_dim, action_dim, max_action, dropout=config.actor_dropout
+        )
     ).to(config.device)
     v_optimizer = torch.optim.Adam(v_network.parameters(), lr=3e-4)
     q_optimizer = torch.optim.Adam(q_network.parameters(), lr=3e-4)
@@ -697,7 +701,8 @@ def train(config: TrainConfig):
                     os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"),
                 )
             wandb.log(
-                {"eval/d4rl_normalized_score": normalized_eval_score}, step=trainer.total_it
+                {"eval/d4rl_normalized_score": normalized_eval_score},
+                step=trainer.total_it
             )
 
 
