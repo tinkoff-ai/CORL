@@ -249,7 +249,7 @@ def modify_reward(dataset, env_name, max_episode_steps=1000):
         return {
             "max_ret": max_ret,
             "min_ret": min_ret,
-            "max_episode_steps": max_episode_steps
+            "max_episode_steps": max_episode_steps,
         }
     elif "antmaze" in env_name:
         dataset["rewards"] -= 1.0
