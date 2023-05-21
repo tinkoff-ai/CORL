@@ -585,7 +585,7 @@ class SPOT:  # noqa
 
         # Compute critic loss
         critic_loss = F.mse_loss(current_q1, target_q) + F.mse_loss(current_q2, target_q)
-        log_dict["critic_loss"] = critic_loss.item()
+        log_dict["SPOT/critic_loss"] = critic_loss.item()
         # Optimize the critic
         self.critic_1_optimizer.zero_grad()
         self.critic_2_optimizer.zero_grad()
