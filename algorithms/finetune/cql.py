@@ -975,13 +975,13 @@ def train(config: TrainConfig):
             replay_buffer.add_transition(state, action, reward, next_state, real_done)
             state = next_state
 
-
             if done:
                 state, done = env.reset(), False
 
                 online_log["episode_return"] = episode_return
-                online_log["d4rl_normalized_episode_return"] \
-                    = eval_env.get_normalized_score(episode_return) * 100.0
+                online_log["d4rl_normalized_episode_return"] = (
+                    eval_env.get_normalized_score(episode_return) * 100.0
+                )
                 online_log["episode_length"] = episode_step
                 episode_return = 0
                 episode_step = 0
