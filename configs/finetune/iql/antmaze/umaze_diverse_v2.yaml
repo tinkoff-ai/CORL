@@ -1,7 +1,7 @@
 batch_size: 256
 beta: 10.0
 buffer_size: 10000000
-checkpoints_path: ./models/iql
+checkpoints_path: null
 device: cuda
 discount: 0.99
 env: antmaze-umaze-diverse-v2

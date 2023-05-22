@@ -2,7 +2,7 @@ actor_dropout: 0.1
 batch_size: 256
 beta: 3.0
 buffer_size: 10000000
-checkpoints_path: ./models/iql
+checkpoints_path: null
 device: cuda
 discount: 0.99
 env: hammer-cloned-v1

@@ -439,7 +439,7 @@ class ImplicitQLearning:
         v = self.vf(observations)
         adv = target_q - v
         v_loss = asymmetric_l2_loss(adv, self.iql_tau)
-        log_dict["IQL/value_loss"] = v_loss.item()
+        log_dict["value_loss"] = v_loss.item()
         self.v_optimizer.zero_grad()
         v_loss.backward()
         self.v_optimizer.step()
@@ -457,7 +457,7 @@ class ImplicitQLearning:
         targets = rewards + (1.0 - terminals.float()) * self.discount * next_v.detach()
         qs = self.qf.both(observations, actions)
         q_loss = sum(F.mse_loss(q, targets) for q in qs) / len(qs)
-        log_dict["IQL/q_loss"] = q_loss.item()
+        log_dict["q_loss"] = q_loss.item()
         self.q_optimizer.zero_grad()
         q_loss.backward()
         self.q_optimizer.step()
@@ -477,7 +477,7 @@ class ImplicitQLearning:
         else:
             raise NotImplementedError
         policy_loss = torch.mean(exp_adv * bc_losses)
-        log_dict["IQL/actor_loss"] = policy_loss.item()
+        log_dict["actor_loss"] = policy_loss.item()
         self.actor_optimizer.zero_grad()
         policy_loss.backward()
         self.actor_optimizer.step()
@@ -633,11 +633,14 @@ def train(config: TrainConfig):
     evaluations = []
 
     state, done = env.reset(), False
+    episode_return = 0
     episode_step = 0
+
     print("Offline pretraining")
     for t in range(int(config.offline_iterations) + int(config.online_iterations)):
         if t == config.offline_iterations:
             print("Online tuning")
+        online_log = {}
         if t >= config.offline_iterations:
             episode_step += 1
             action = actor(
@@ -656,7 +659,9 @@ def train(config: TrainConfig):
             action = action.cpu().data.numpy().flatten()
             next_state, reward, done, _ = env.step(action)
 
-            real_done = False
+            episode_return += reward
+
+            real_done = False   # Episode can timeout which is different from done
             if done and episode_step < max_steps:
                 real_done = True
 
@@ -667,6 +672,9 @@ def train(config: TrainConfig):
             state = next_state
             if done:
                 state, done = env.reset(), False
+                online_log["episode_return"] = episode_return
+                online_log["episode_length"] = episode_step
+                episode_return = 0
                 episode_step = 0
 
         batch = replay_buffer.sample(config.batch_size)
@@ -675,6 +683,7 @@ def train(config: TrainConfig):
         log_dict["offline_iter" if t < config.offline_iterations else "online_iter"] = (
             t if t < config.offline_iterations else t - config.offline_iterations
         )
+        log_dict.update(online_log)
         wandb.log(log_dict, step=trainer.total_it)
         # Evaluate episode
         if (t + 1) % config.eval_freq == 0:
