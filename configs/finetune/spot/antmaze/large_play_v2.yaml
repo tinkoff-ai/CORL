@@ -3,7 +3,7 @@ actor_lr: 0.0001
 batch_size: 256
 beta: 0.5
 buffer_size: 2000000
-checkpoints_path: ./models/spot
+checkpoints_path: null
 critic_init_w: 0.003
 critic_lr: 0.0003
 device: cuda

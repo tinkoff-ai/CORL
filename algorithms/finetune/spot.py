@@ -585,7 +585,7 @@ class SPOT:  # noqa
 
         # Compute critic loss
         critic_loss = F.mse_loss(current_q1, target_q) + F.mse_loss(current_q2, target_q)
-        log_dict["SPOT/critic_loss"] = critic_loss.item()
+        log_dict["critic_loss"] = critic_loss.item()
         # Optimize the critic
         self.critic_1_optimizer.zero_grad()
         self.critic_2_optimizer.zero_grad()
@@ -615,10 +615,10 @@ class SPOT:  # noqa
 
             actor_loss = -norm_q * q.mean() + lambd * neg_log_beta.mean()
 
-            log_dict["SPOT/actor_loss"] = actor_loss.item()
-            log_dict["SPOT/neg_log_beta_mean"] = neg_log_beta.mean().item()
-            log_dict["SPOT/neg_log_beta_max"] = neg_log_beta.max().item()
-            log_dict["SPOT/lambd"] = lambd
+            log_dict["actor_loss"] = actor_loss.item()
+            log_dict["neg_log_beta_mean"] = neg_log_beta.mean().item()
+            log_dict["neg_log_beta_max"] = neg_log_beta.max().item()
+            log_dict["lambd"] = lambd
 
             # Optimize the actor
             self.actor_optimizer.zero_grad()
@@ -781,7 +781,9 @@ def train(config: TrainConfig):
 
     vae.eval()
     state, done = env.reset(), False
+    episode_return = 0
     episode_step = 0
+
     print("Offline pretraining")
     for t in range(int(config.offline_iterations) + int(config.online_iterations)):
         if t == config.offline_iterations:
@@ -798,7 +800,7 @@ def train(config: TrainConfig):
             trainer.critic_2_optimizer = torch.optim.Adam(
                 critic_2.parameters(), lr=config.critic_lr
             )
-
+        online_log = {}
         if t >= config.offline_iterations:
             episode_step += 1
             action = actor(
@@ -814,7 +816,8 @@ def train(config: TrainConfig):
             action = action.cpu().data.numpy().flatten()
             next_state, reward, done, _ = env.step(action)
 
-            real_done = False
+            episode_return += reward
+            real_done = False  # Episode can timeout which is different from done
             if done and episode_step < max_steps:
                 real_done = True
 
@@ -825,6 +828,11 @@ def train(config: TrainConfig):
             state = next_state
             if done:
                 state, done = env.reset(), False
+                online_log["episode_return"] = episode_return
+                online_log["d4rl_normalized_episode_return"] \
+                    = eval_env.get_normalized_score(episode_return) * 100.0
+                online_log["episode_length"] = episode_step
+                episode_return = 0
                 episode_step = 0
 
         batch = replay_buffer.sample(config.batch_size)
@@ -833,6 +841,7 @@ def train(config: TrainConfig):
         log_dict["offline_iter" if t < config.offline_iterations else "online_iter"] = (
             t if t < config.offline_iterations else t - config.offline_iterations
         )
+        log_dict.update(online_log)
         wandb.log(log_dict, step=trainer.total_it)
         # Evaluate episode
         if (t + 1) % config.eval_freq == 0:
