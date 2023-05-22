@@ -299,7 +299,7 @@ class AdvantageWeightedActorCritic:
         soft_update(self._target_critic_1, self._critic_1, self._tau)
         soft_update(self._target_critic_2, self._critic_2, self._tau)
 
-        result = {"AWAC/critic_loss": critic_loss, "AWAC/actor_loss": actor_loss}
+        result = {"critic_loss": critic_loss, "actor_loss": actor_loss}
         return result
 
     def state_dict(self) -> Dict[str, Any]:
@@ -491,13 +491,15 @@ def train(config: TrainConfig):
     full_eval_scores, full_normalized_eval_scores = [], []
     state, done = env.reset(), False
     episode_step = 0
-    print("Offline pretraining")
+    episode_return = 0
 
+    print("Offline pretraining")
     for t in trange(
         int(config.offline_iterations) + int(config.online_iterations), ncols=80
     ):
         if t == config.offline_iterations:
             print("Online tuning")
+        online_log = {}
         if t >= config.offline_iterations:
             episode_step += 1
             action, _ = actor(
@@ -508,7 +510,8 @@ def train(config: TrainConfig):
             action = action.cpu().data.numpy().flatten()
             next_state, reward, done, _ = env.step(action)
 
-            real_done = False
+            episode_return += reward
+            real_done = False  # Episode can timeout which is different from done
             if done and episode_step < max_steps:
                 real_done = True
 
@@ -519,6 +522,11 @@ def train(config: TrainConfig):
             state = next_state
             if done:
                 state, done = env.reset(), False
+                online_log["episode_return"] = episode_return
+                online_log["normalized_episode_return"] \
+                    = eval_env.get_normalized_score(episode_return) * 100.0
+                online_log["episode_length"] = episode_step
+                episode_return = 0
                 episode_step = 0
 
         batch = replay_buffer.sample(config.batch_size)
@@ -527,6 +535,7 @@ def train(config: TrainConfig):
         update_result[
             "offline_iter" if t < config.offline_iterations else "online_iter"
         ] = (t if t < config.offline_iterations else t - config.offline_iterations)
+        update_result.update(online_log)
         wandb.log(update_result, step=t)
         if (t + 1) % config.eval_frequency == 0:
             eval_scores = eval_actor(
