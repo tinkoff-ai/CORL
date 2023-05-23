@@ -1019,7 +1019,7 @@ def train(config: TrainConfig):
                     os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"),
                 )
             wandb.log(
-                {"d4rl_normalized_score": normalized_eval_score},
+                {"eval/d4rl_normalized_score": normalized_eval_score},
                 step=trainer.total_it,
             )
 
