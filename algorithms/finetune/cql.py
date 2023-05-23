@@ -31,7 +31,7 @@ class TrainConfig:
     eval_seed: int = 0  # Eval environment seed
     eval_freq: int = int(5e3)  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
-    offline_iterations: int = int(1e6)  # Max time steps to run environment
+    offline_iterations: int = int(1e6)  # Number of offline updates
     online_iterations: int = int(1e6)  # Number of online updates
     checkpoints_path: Optional[str] = None  # Save path
     load_model: str = ""  # Model load file name, "" doesn't load
@@ -956,12 +956,12 @@ def train(config: TrainConfig):
             print("Online tuning")
         online_log = {}
         if t >= config.offline_iterations:
+            episode_step += 1
             action, _ = actor(
                 torch.tensor(
                     state.reshape(1, -1), device=config.device, dtype=torch.float32
                 )
             )
-            action = torch.clamp(max_action * action, -max_action, max_action)
             action = action.cpu().data.numpy().flatten()
             next_state, reward, done, _ = env.step(action)
 
