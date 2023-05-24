@@ -247,7 +247,7 @@ def return_reward_range(dataset, max_episode_steps):
 
 
 def get_return_to_go(dataset, gamma, max_episode_steps):
-    returns, lengths = [], []
+    returns = []
     ep_ret, ep_len = 0.0, 0
     cur_rewards = []
     terminals = []
@@ -680,7 +680,7 @@ class CalQL:
         cql_q1_next_actions = self.critic_1(observations, cql_next_actions)
         cql_q2_next_actions = self.critic_2(observations, cql_next_actions)
 
-        """ Cal-QL: prepare for Cal-QL, and calculate how much data will be lower bounded for logging """
+        # Calibration
         lower_bounds = mc_returns.reshape(-1, 1).repeat(
             1, cql_q1_current_actions.shape[1]
         )
@@ -815,8 +815,8 @@ class CalQL:
                 cql_q2_next_actions=cql_q2_next_actions.mean().item(),
                 alpha_prime_loss=alpha_prime_loss.item(),
                 alpha_prime=alpha_prime.item(),
-                bound_rate_cql_q1_current_actions=bound_rate_cql_q1_current_actions.item(),
-                bound_rate_cql_q2_current_actions=bound_rate_cql_q2_current_actions.item(),
+                bound_rate_cql_q1_current_actions=bound_rate_cql_q1_current_actions.item(), # noqa
+                bound_rate_cql_q2_current_actions=bound_rate_cql_q2_current_actions.item(), # noqa
                 bound_rate_cql_q1_next_actions=bound_rate_cql_q1_next_actions.item(),
                 bound_rate_cql_q2_next_actions=bound_rate_cql_q2_next_actions.item(),
             )
