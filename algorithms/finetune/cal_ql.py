@@ -272,7 +272,7 @@ def get_return_to_go(dataset, gamma, max_episode_steps):
     prev_return = 0
     for i in range(ep_len):
         discounted_returns[-i - 1] = cur_rewards[-i - 1] + gamma * prev_return * (
-                1 - terminals[-i - 1]
+            1 - terminals[-i - 1]
         )
         prev_return = discounted_returns[-i - 1]
     returns += discounted_returns
