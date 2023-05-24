@@ -815,8 +815,8 @@ class CalQL:
                 cql_q2_next_actions=cql_q2_next_actions.mean().item(),
                 alpha_prime_loss=alpha_prime_loss.item(),
                 alpha_prime=alpha_prime.item(),
-                bound_rate_cql_q1_current_actions=bound_rate_cql_q1_current_actions.item(), # noqa
-                bound_rate_cql_q2_current_actions=bound_rate_cql_q2_current_actions.item(), # noqa
+                bound_rate_cql_q1_current_actions=bound_rate_cql_q1_current_actions.item(),  # noqa
+                bound_rate_cql_q2_current_actions=bound_rate_cql_q2_current_actions.item(),  # noqa
                 bound_rate_cql_q1_next_actions=bound_rate_cql_q1_next_actions.item(),
                 bound_rate_cql_q2_next_actions=bound_rate_cql_q2_next_actions.item(),
             )
