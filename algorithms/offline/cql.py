@@ -50,7 +50,7 @@ class TrainConfig:
     cql_lagrange: bool = False  # Use Lagrange version of CQL
     cql_target_action_gap: float = -1.0  # Action gap
     cql_temp: float = 1.0  # CQL temperature
-    cql_min_q_weight: float = 10.0  # Minimal Q weight
+    cql_alpha: float = 10.0  # Minimal Q weight
     cql_max_target_backup: bool = False  # Use max target backup
     cql_clip_diff_min: float = -np.inf  # Q-function lower loss clipping
     cql_clip_diff_max: float = np.inf  # Q-function upper loss clipping
@@ -437,7 +437,7 @@ class ContinuousCQL:
         cql_lagrange: bool = False,
         cql_target_action_gap: float = -1.0,
         cql_temp: float = 1.0,
-        cql_min_q_weight: float = 5.0,
+        cql_alpha: float = 5.0,
         cql_max_target_backup: bool = False,
         cql_clip_diff_min: float = -np.inf,
         cql_clip_diff_max: float = np.inf,
@@ -460,7 +460,7 @@ class ContinuousCQL:
         self.cql_lagrange = cql_lagrange
         self.cql_target_action_gap = cql_target_action_gap
         self.cql_temp = cql_temp
-        self.cql_min_q_weight = cql_min_q_weight
+        self.cql_alpha = cql_alpha
         self.cql_max_target_backup = cql_max_target_backup
         self.cql_clip_diff_min = cql_clip_diff_min
         self.cql_clip_diff_max = cql_clip_diff_max
@@ -656,12 +656,12 @@ class ContinuousCQL:
             )
             cql_min_qf1_loss = (
                 alpha_prime  # noqa
-                * self.cql_min_q_weight  # noqa
+                * self.cql_alpha  # noqa
                 * (cql_qf1_diff - self.cql_target_action_gap)  # noqa
             )
             cql_min_qf2_loss = (
                 alpha_prime  # noqa
-                * self.cql_min_q_weight  # noqa
+                * self.cql_alpha  # noqa
                 * (cql_qf2_diff - self.cql_target_action_gap)  # noqa
             )
 
@@ -670,8 +670,8 @@ class ContinuousCQL:
             alpha_prime_loss.backward(retain_graph=True)
             self.alpha_prime_optimizer.step()
         else:
-            cql_min_qf1_loss = cql_qf1_diff * self.cql_min_q_weight
-            cql_min_qf2_loss = cql_qf2_diff * self.cql_min_q_weight
+            cql_min_qf1_loss = cql_qf1_diff * self.cql_alpha
+            cql_min_qf2_loss = cql_qf2_diff * self.cql_alpha
             alpha_prime_loss = observations.new_tensor(0.0)
             alpha_prime = observations.new_tensor(0.0)
 
@@ -887,7 +887,7 @@ def train(config: TrainConfig):
         "cql_lagrange": config.cql_lagrange,
         "cql_target_action_gap": config.cql_target_action_gap,
         "cql_temp": config.cql_temp,
-        "cql_min_q_weight": config.cql_min_q_weight,
+        "cql_alpha": config.cql_alpha,
         "cql_max_target_backup": config.cql_max_target_backup,
         "cql_clip_diff_min": config.cql_clip_diff_min,
         "cql_clip_diff_max": config.cql_clip_diff_max,
