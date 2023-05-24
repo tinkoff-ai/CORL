@@ -131,7 +131,9 @@ class ReplayBuffer:
             (buffer_size, state_dim), dtype=torch.float32, device=device
         )
         self._dones = torch.zeros((buffer_size, 1), dtype=torch.float32, device=device)
-        self._mc_returns = torch.zeros((buffer_size, 1), dtype=torch.float32, device=device)
+        self._mc_returns = torch.zeros(
+            (buffer_size, 1), dtype=torch.float32, device=device
+        )
 
         self._device = device
 
@@ -258,9 +260,9 @@ def get_return_to_go(dataset, gamma, max_episode_steps):
             discounted_returns = [0] * ep_len
             prev_return = 0
             for i in range(ep_len):
-                discounted_returns[-i - 1] = (
-                        cur_rewards[-i - 1] + gamma * prev_return * (1 - terminals[-i - 1])
-                )
+                discounted_returns[-i - 1] = cur_rewards[
+                    -i - 1
+                ] + gamma * prev_return * (1 - terminals[-i - 1])
                 prev_return = discounted_returns[-i - 1]
             returns += discounted_returns
             ep_ret, ep_len = 0.0, 0
@@ -269,8 +271,8 @@ def get_return_to_go(dataset, gamma, max_episode_steps):
     discounted_returns = [0] * ep_len
     prev_return = 0
     for i in range(ep_len):
-        discounted_returns[-i - 1] = (
-                cur_rewards[-i - 1] + gamma * prev_return * (1 - terminals[-i - 1])
+        discounted_returns[-i - 1] = cur_rewards[-i - 1] + gamma * prev_return * (
+                1 - terminals[-i - 1]
         )
         prev_return = discounted_returns[-i - 1]
     returns += discounted_returns
@@ -607,7 +609,15 @@ class CalQL:
         return policy_loss
 
     def _q_loss(
-        self, observations, actions, next_observations, rewards, dones, mc_returns, alpha, log_dict
+        self,
+        observations,
+        actions,
+        next_observations,
+        rewards,
+        dones,
+        mc_returns,
+        alpha,
+        log_dict,
     ):
         q1_predicted = self.critic_1(observations, actions)
         q2_predicted = self.critic_2(observations, actions)
@@ -671,13 +681,23 @@ class CalQL:
         cql_q2_next_actions = self.critic_2(observations, cql_next_actions)
 
         """ Cal-QL: prepare for Cal-QL, and calculate how much data will be lower bounded for logging """
-        lower_bounds = mc_returns.reshape(-1, 1).repeat(1, cql_q1_current_actions.shape[1])
+        lower_bounds = mc_returns.reshape(-1, 1).repeat(
+            1, cql_q1_current_actions.shape[1]
+        )
 
         num_vals = torch.sum(lower_bounds == lower_bounds)
-        bound_rate_cql_q1_current_actions = torch.sum(cql_q1_current_actions < lower_bounds) / num_vals
-        bound_rate_cql_q2_current_actions = torch.sum(cql_q2_current_actions < lower_bounds) / num_vals
-        bound_rate_cql_q1_next_actions = torch.sum(cql_q1_next_actions < lower_bounds) / num_vals
-        bound_rate_cql_q2_next_actions = torch.sum(cql_q2_next_actions < lower_bounds) / num_vals
+        bound_rate_cql_q1_current_actions = (
+            torch.sum(cql_q1_current_actions < lower_bounds) / num_vals
+        )
+        bound_rate_cql_q2_current_actions = (
+            torch.sum(cql_q2_current_actions < lower_bounds) / num_vals
+        )
+        bound_rate_cql_q1_next_actions = (
+            torch.sum(cql_q1_next_actions < lower_bounds) / num_vals
+        )
+        bound_rate_cql_q2_next_actions = (
+            torch.sum(cql_q2_next_actions < lower_bounds) / num_vals
+        )
 
         """ Cal-QL: bound Q-values with MC return-to-go """
         if self._calibration_enabled:
@@ -833,7 +853,14 @@ class CalQL:
 
         """ Q function loss """
         qf_loss, alpha_prime, alpha_prime_loss = self._q_loss(
-            observations, actions, next_observations, rewards, dones, mc_returns, alpha, log_dict
+            observations,
+            actions,
+            next_observations,
+            rewards,
+            dones,
+            mc_returns,
+            alpha,
+            log_dict,
         )
 
         if self.use_automatic_entropy_tuning:
