@@ -172,12 +172,12 @@ class ReplayBuffer:
         return [states, actions, rewards, next_states, dones, mc_returns]
 
     def add_transition(
-            self,
-            state: np.ndarray,
-            action: np.ndarray,
-            reward: float,
-            next_state: np.ndarray,
-            done: bool,
+        self,
+        state: np.ndarray,
+        action: np.ndarray,
+        reward: float,
+        next_state: np.ndarray,
+        done: bool,
     ):
         # Use this method to add new data into the replay buffer during fine-tuning.
         self._states[self._pointer] = self._to_tensor(state)
