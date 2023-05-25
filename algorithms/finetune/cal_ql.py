@@ -171,7 +171,14 @@ class ReplayBuffer:
         mc_returns = self._mc_returns[indices]
         return [states, actions, rewards, next_states, dones, mc_returns]
 
-    def add_transition(self, state, action, reward, next_state, done):
+    def add_transition(
+            self,
+            state: np.ndarray,
+            action: np.ndarray,
+            reward: float,
+            next_state: np.ndarray,
+            done: bool,
+    ):
         # Use this method to add new data into the replay buffer during fine-tuning.
         self._states[self._pointer] = self._to_tensor(state)
         self._actions[self._pointer] = self._to_tensor(action)
@@ -184,7 +191,7 @@ class ReplayBuffer:
         self._size = min(self._size + 1, self._buffer_size)
 
 
-def set_env_seed(env: Optional[gym.Env], seed):
+def set_env_seed(env: Optional[gym.Env], seed: int):
     env.seed(seed)
     env.action_space.seed(seed)
 
@@ -232,7 +239,7 @@ def eval_actor(
     return np.asarray(episode_rewards)
 
 
-def return_reward_range(dataset, max_episode_steps):
+def return_reward_range(dataset: Dict, max_episode_steps: int) -> Tuple[float, float]:
     returns, lengths = [], []
     ep_ret, ep_len = 0.0, 0
     for r, d in zip(dataset["rewards"], dataset["terminals"]):
@@ -247,7 +254,7 @@ def return_reward_range(dataset, max_episode_steps):
     return min(returns), max(returns)
 
 
-def get_return_to_go(dataset, gamma, max_episode_steps):
+def get_return_to_go(dataset: Dict, gamma: float, max_episode_steps: int) -> List[float]:
     returns = []
     ep_ret, ep_len = 0.0, 0
     cur_rewards = []
@@ -280,7 +287,7 @@ def get_return_to_go(dataset, gamma, max_episode_steps):
     return returns
 
 
-def modify_reward(dataset, env_name, max_episode_steps=1000):
+def modify_reward(dataset: Dict, env_name: str, max_episode_steps: int = 1000) -> Dict:
     if any(s in env_name for s in ("halfcheetah", "hopper", "walker2d")):
         min_ret, max_ret = return_reward_range(dataset, max_episode_steps)
         dataset["rewards"] /= max_ret - min_ret
@@ -295,7 +302,7 @@ def modify_reward(dataset, env_name, max_episode_steps=1000):
     return {}
 
 
-def modify_reward_online(reward, env_name, **kwargs):
+def modify_reward_online(reward: float, env_name: str, **kwargs) -> float:
     if any(s in env_name for s in ("halfcheetah", "hopper", "walker2d")):
         reward /= kwargs["max_ret"] - kwargs["min_ret"]
         reward *= kwargs["max_episode_steps"]
@@ -964,7 +971,7 @@ def train(config: TrainConfig):
     )
     env = wrap_env(env, state_mean=state_mean, state_std=state_std)
     eval_env = wrap_env(eval_env, state_mean=state_mean, state_std=state_std)
-    replay_buffer = ReplayBuffer(
+    offline_buffer = ReplayBuffer(
         state_dim,
         action_dim,
         config.buffer_size,
@@ -976,7 +983,7 @@ def train(config: TrainConfig):
         config.buffer_size,
         config.device,
     )
-    replay_buffer.load_d4rl_dataset(dataset)
+    offline_buffer.load_d4rl_dataset(dataset)
 
     max_action = float(env.action_space.high[0])
 
@@ -1084,19 +1091,19 @@ def train(config: TrainConfig):
             if done:
                 state, done = env.reset(), False
 
-                online_log["episode_return"] = episode_return
-                online_log["d4rl_normalized_episode_return"] = (
+                online_log["train/episode_return"] = episode_return
+                online_log["train/d4rl_normalized_episode_return"] = (
                     eval_env.get_normalized_score(episode_return) * 100.0
                 )
-                online_log["episode_length"] = episode_step
+                online_log["train/episode_length"] = episode_step
                 episode_return = 0
                 episode_step = 0
 
         if t < config.offline_iterations:
-            batch = replay_buffer.sample(config.batch_size)
+            batch = offline_buffer.sample(config.batch_size)
             batch = [b.to(config.device) for b in batch]
         else:
-            offline_batch = replay_buffer.sample(batch_size_offline)
+            offline_batch = offline_buffer.sample(batch_size_offline)
             online_batch = online_buffer.sample(batch_size_online)
             batch = [
                 torch.vstack(tuple(b)).to(config.device)
