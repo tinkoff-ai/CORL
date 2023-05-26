@@ -57,6 +57,7 @@ class TrainConfig:
     orthogonal_init: bool = True  # Orthogonal initialization
     normalize: bool = True  # Normalize states
     normalize_reward: bool = False  # Normalize reward
+    q_n_hidden_layers: int = 3  # Number of hidden layers in Q networks
     # Wandb logging
     project: str = "CORL"
     group: str = "CQL-D4RL"
@@ -369,25 +370,24 @@ class FullyConnectedQFunction(nn.Module):
         observation_dim: int,
         action_dim: int,
         orthogonal_init: bool = False,
+        n_hidden_layers: int = 3,
     ):
         super().__init__()
         self.observation_dim = observation_dim
         self.action_dim = action_dim
         self.orthogonal_init = orthogonal_init
 
-        self.network = nn.Sequential(
+        layers = [
             nn.Linear(observation_dim + action_dim, 256),
             nn.ReLU(),
-            nn.Linear(256, 256),
-            nn.ReLU(),
-            nn.Linear(256, 256),
-            nn.ReLU(),
-            nn.Linear(256, 256),
-            nn.ReLU(),
-            nn.Linear(256, 256),
-            nn.ReLU(),
-            nn.Linear(256, 1),
-        )
+        ]
+        for _ in range(n_hidden_layers - 1):
+            layers.append(nn.Linear(256, 256))
+            layers.append(nn.ReLU())
+        layers.append(nn.Linear(256, 1))
+
+        self.network = nn.Sequential(*layers)
+
         if orthogonal_init:
             self.network.apply(lambda m: init_module_weights(m, True))
         else:
@@ -854,9 +854,12 @@ def train(config: TrainConfig):
     seed = config.seed
     set_seed(seed, env)
 
-    critic_1 = FullyConnectedQFunction(state_dim, action_dim, config.orthogonal_init).to(
-        config.device
-    )
+    critic_1 = FullyConnectedQFunction(
+        state_dim,
+        action_dim,
+        config.orthogonal_init,
+        config.q_n_hidden_layers,
+    ).to(config.device)
     critic_2 = FullyConnectedQFunction(state_dim, action_dim, config.orthogonal_init).to(
         config.device
     )

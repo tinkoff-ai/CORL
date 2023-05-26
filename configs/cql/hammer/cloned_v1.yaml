@@ -9,15 +9,15 @@ cql_clip_diff_min: -.inf
 cql_importance_sample: true
 cql_lagrange: false
 cql_max_target_backup: false
-cql_min_q_weight: 10.0
+cql_min_q_weight: 1.0
 cql_n_actions: 10
 cql_target_action_gap: -1.0
 cql_temp: 1.0
 device: cuda
 discount: 0.99
-env: hopper-medium-expert-v2
+env: hammer-cloned-v1
 eval_freq: 5000
-group: cql-hopper-medium-expert-v2-multiseed-v0
+group: cql-hammer-cloned-v1-multiseed-v0
 load_model: ''
 max_timesteps: 1000000
 n_episodes: 10
@@ -25,7 +25,7 @@ name: CQL
 normalize: true
 normalize_reward: false
 orthogonal_init: true
-policy_lr: 3.0e-05
+policy_lr: 1.0e-04
 project: CORL
 qf_lr: 0.0003
 seed: 0
