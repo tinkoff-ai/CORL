@@ -2,7 +2,7 @@ awac_lambda: 0.1
 batch_size: 256
 buffer_size: 10000000
 checkpoints_path: null
-deterministic_torch: true
+deterministic_torch: false
 device: cuda
 env_name: pen-cloned-v1
 eval_frequency: 1000
