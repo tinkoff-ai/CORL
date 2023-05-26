@@ -134,7 +134,7 @@ def load_d4rl_trajectories(
     dataset = gym.make(env_name).get_dataset()
     traj, traj_len = [], []
 
-    data_, episode_step = defaultdict(list), 0
+    data_ = defaultdict(list)
     for i in trange(dataset["rewards"].shape[0], desc="Processing trajectories"):
         data_["observations"].append(dataset["observations"][i])
         data_["actions"].append(dataset["actions"][i])
@@ -147,11 +147,9 @@ def load_d4rl_trajectories(
                 episode_data["rewards"], gamma=gamma
             )
             traj.append(episode_data)
-            traj_len.append(episode_step)
+            traj_len.append(episode_data["actions"].shape[0])
             # reset trajectory buffer
-            data_, episode_step = defaultdict(list), 0
-
-        episode_step += 1
+            data_ = defaultdict(list)
 
     # needed for normalization, weighted sampling, other stats can be added also
     info = {
