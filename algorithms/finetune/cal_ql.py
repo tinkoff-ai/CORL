@@ -268,7 +268,9 @@ def get_return_to_go(dataset: Dict, gamma: float, max_episode_steps: int) -> Lis
             discounted_returns = [0] * ep_len
             prev_return = 0
             for i in reversed(range(ep_len)):
-                discounted_returns[i] = cur_rewards[i] + gamma * prev_return * (1 - terminals[i])
+                discounted_returns[i] = cur_rewards[i] + gamma * prev_return * (
+                    1 - terminals[i]
+                )
                 prev_return = discounted_returns[i]
             returns += discounted_returns
             ep_ret, ep_len = 0.0, 0
@@ -277,9 +279,7 @@ def get_return_to_go(dataset: Dict, gamma: float, max_episode_steps: int) -> Lis
     discounted_returns = [0] * ep_len
     prev_return = 0
     for i in reversed(range(ep_len)):
-        discounted_returns[i] = cur_rewards[i] + gamma * prev_return * (
-            1 - terminals[i]
-        )
+        discounted_returns[i] = cur_rewards[i] + gamma * prev_return * (1 - terminals[i])
         prev_return = discounted_returns[i]
     returns += discounted_returns
     return returns
