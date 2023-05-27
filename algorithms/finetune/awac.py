@@ -528,10 +528,12 @@ def train(config: TrainConfig):
                 online_log["train/episode_return"] = episode_return
                 normalized_return = eval_env.get_normalized_score(episode_return)
                 online_log["train/d4rl_normalized_episode_return"] = (
-                        normalized_return * 100.0
+                    normalized_return * 100.0
                 )
                 train_normalized_scores.append(normalized_return)
-                online_log["train/regret"] = np.mean(1 - np.clip(train_normalized_scores, 0, 1))
+                online_log["train/regret"] = np.mean(
+                    1 - np.clip(train_normalized_scores, 0, 1)
+                )
                 online_log["train/episode_length"] = episode_step
                 episode_return = 0
                 episode_step = 0
