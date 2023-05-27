@@ -681,7 +681,9 @@ def train(config: TrainConfig):
                     normalized_return * 100.0
                 )
                 train_normalized_scores.append(normalized_return)
-                online_log["train/regret"] = np.mean(1 - np.array(train_normalized_scores))
+                online_log["train/regret"] = np.mean(
+                    1 - np.array(train_normalized_scores)
+                )
                 online_log["train/episode_length"] = episode_step
                 episode_return = 0
                 episode_step = 0
