@@ -1064,6 +1064,9 @@ def train(config: TrainConfig):
     episode_return = 0
     episode_step = 0
 
+    eval_normalized_scores = []
+    train_normalized_scores = []
+
     print("Offline pretraining")
     for t in range(int(config.offline_iterations) + int(config.online_iterations)):
         if t == config.offline_iterations:
@@ -1093,10 +1096,14 @@ def train(config: TrainConfig):
 
             if done:
                 state, done = env.reset(), False
-
                 online_log["train/episode_return"] = episode_return
+                normalized_return = eval_env.get_normalized_score(episode_return)
                 online_log["train/d4rl_normalized_episode_return"] = (
-                    eval_env.get_normalized_score(episode_return) * 100.0
+                        normalized_return * 100.0
+                )
+                train_normalized_scores.append(normalized_return)
+                online_log["train/regret"] = np.mean(
+                    1 - np.clip(train_normalized_scores, 0, 1)
                 )
                 online_log["train/episode_length"] = episode_step
                 episode_return = 0
@@ -1130,7 +1137,15 @@ def train(config: TrainConfig):
                 seed=config.seed,
             )
             eval_score = eval_scores.mean()
-            normalized_eval_score = eval_env.get_normalized_score(eval_score) * 100.0
+            eval_log = {}
+            normalized = eval_env.get_normalized_score(np.mean(eval_scores))
+            if t >= config.offline_iterations:
+                eval_normalized_scores.append(normalized)
+                eval_log["eval/regret"] = np.mean(
+                    1 - np.clip(eval_normalized_scores, 0, 1)
+                )
+            normalized_eval_score = normalized * 100.0
+            eval_log["eval/d4rl_normalized_score"] = normalized_eval_score
             evaluations.append(normalized_eval_score)
             print("---------------------------------------")
             print(
@@ -1143,10 +1158,7 @@ def train(config: TrainConfig):
                     trainer.state_dict(),
                     os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"),
                 )
-            wandb.log(
-                {"eval/d4rl_normalized_score": normalized_eval_score},
-                step=trainer.total_it,
-            )
+            wandb.log(eval_log, step=trainer.total_it)
 
 
 if __name__ == "__main__":
