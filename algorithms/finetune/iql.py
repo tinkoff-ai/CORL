@@ -682,7 +682,7 @@ def train(config: TrainConfig):
                 )
                 train_normalized_scores.append(normalized_return)
                 online_log["train/regret"] = np.mean(
-                    1 - np.array(train_normalized_scores)
+                    1 - np.clip(train_normalized_scores, 0, 1)
                 )
                 online_log["train/episode_length"] = episode_step
                 episode_return = 0
@@ -711,7 +711,9 @@ def train(config: TrainConfig):
             normalized = eval_env.get_normalized_score(eval_score)
             if t >= config.offline_iterations:
                 eval_normalized_scores.append(normalized)
-                eval_log["eval/regret"] = np.mean(1 - np.array(eval_normalized_scores))
+                eval_log["eval/regret"] = np.mean(
+                    1 - np.clip(eval_normalized_scores, 0, 1)
+                )
             normalized_eval_score = normalized * 100.0
             evaluations.append(normalized_eval_score)
             eval_log["eval/d4rl_normalized_score"] = normalized_eval_score
