@@ -688,14 +688,14 @@ class ContinuousCQL:
                 torch.exp(self.log_alpha_prime()), min=0.0, max=1000000.0
             )
             cql_min_qf1_loss = (
-                    alpha_prime  # noqa
-                    * self.cql_alpha  # noqa
-                    * (cql_qf1_diff - self.cql_target_action_gap)  # noqa
+                alpha_prime  # noqa
+                * self.cql_alpha  # noqa
+                * (cql_qf1_diff - self.cql_target_action_gap)  # noqa
             )
             cql_min_qf2_loss = (
-                    alpha_prime  # noqa
-                    * self.cql_alpha  # noqa
-                    * (cql_qf2_diff - self.cql_target_action_gap)  # noqa
+                alpha_prime  # noqa
+                * self.cql_alpha  # noqa
+                * (cql_qf2_diff - self.cql_target_action_gap)  # noqa
             )
 
             self.alpha_prime_optimizer.zero_grad()
