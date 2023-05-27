@@ -14,9 +14,9 @@ eval_seed: 0
 expl_noise: 0.1
 group: SPOT-D4RL
 iwae: false
-lambd: 0.25
+lambd: 1.0
 lambd_cool: true
-lambd_end: 0.2
+lambd_end: 0.5
 load_model: ''
 n_episodes: 10
 name: SPOT
