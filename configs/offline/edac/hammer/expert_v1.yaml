@@ -6,13 +6,13 @@ checkpoints_path: null
 critic_learning_rate: 0.0003
 deterministic_torch: false
 device: cuda
-env_name: "hammer-cloned-v1"
+env_name: "hammer-expert-v1"
 eta: 200.0
 eval_episodes: 10
 eval_every: 5
 eval_seed: 42
 gamma: 0.99
-group: "edac-hammer-cloned-v1-multiseed-v2"
+group: "edac-hammer-expert-v1-multiseed-v2"
 hidden_dim: 256
 log_every: 100
 max_action: 1.0
