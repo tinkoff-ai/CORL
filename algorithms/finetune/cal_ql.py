@@ -1078,6 +1078,7 @@ def train(config: TrainConfig):
     state, done = env.reset(), False
     episode_return = 0
     episode_step = 0
+    goal_achieved = False
 
     eval_successes = []
     train_successes = []
@@ -1099,6 +1100,8 @@ def train(config: TrainConfig):
             action = action.cpu().data.numpy().flatten()
             next_state, reward, done, env_infos = env.step(action)
 
+            if not goal_achieved:
+                goal_achieved = is_goal_reached(reward, env_infos)
             episode_return += reward
             real_done = False  # Episode can timeout which is different from done
             if done and episode_step < max_steps:
@@ -1113,7 +1116,6 @@ def train(config: TrainConfig):
                 state, done = env.reset(), False
                 # Valid only for envs with goal, e.g. AntMaze, Adroit
                 if is_env_with_goal:
-                    goal_achieved = is_goal_reached(reward, env_infos)
                     train_successes.append(goal_achieved)
                     online_log["train/regret"] = np.mean(1 - np.array(train_successes))
                     online_log["train/is_success"] = float(goal_achieved)
@@ -1125,6 +1127,7 @@ def train(config: TrainConfig):
                 online_log["train/episode_length"] = episode_step
                 episode_return = 0
                 episode_step = 0
+                goal_achieved = False
 
         if t < config.offline_iterations:
             batch = offline_buffer.sample(config.batch_size)
