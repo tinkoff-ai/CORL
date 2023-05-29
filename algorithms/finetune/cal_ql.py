@@ -20,6 +20,8 @@ import wandb
 
 TensorBatch = List[torch.Tensor]
 
+ENVS_WITH_GOAL = ["antmaze", "pen", "door", "hammer", "relocate"]
+
 
 @dataclass
 class TrainConfig:
@@ -220,24 +222,36 @@ def wandb_init(config: dict) -> None:
     wandb.run.save()
 
 
+def is_goal_reached(reward, info):
+    if "goal_achieved" in info:
+        return info["goal_achieved"]
+    return reward > 0  # Assuming that reaching target is a positive reward
+
+
 @torch.no_grad()
 def eval_actor(
     env: gym.Env, actor: nn.Module, device: str, n_episodes: int, seed: int
-) -> np.ndarray:
+) -> Tuple[np.ndarray, np.ndarray]:
     env.seed(seed)
     actor.eval()
     episode_rewards = []
+    successes = []
     for _ in range(n_episodes):
         state, done = env.reset(), False
         episode_reward = 0.0
+        goal_achieved = False
         while not done:
             action = actor.act(state, device)
-            state, reward, done, _ = env.step(action)
+            state, reward, done, env_infos = env.step(action)
             episode_reward += reward
+            if not goal_achieved:
+                goal_achieved = is_goal_reached(reward, env_infos)
+                # Valid only for environments with goal
+        successes.append(float(goal_achieved))
         episode_rewards.append(episode_reward)
 
     actor.train()
-    return np.asarray(episode_rewards)
+    return np.asarray(episode_rewards), np.mean(successes)
 
 
 def return_reward_range(dataset: Dict, max_episode_steps: int) -> Tuple[float, float]:
@@ -938,6 +952,8 @@ def train(config: TrainConfig):
     env = gym.make(config.env)
     eval_env = gym.make(config.env)
 
+    is_env_with_goal = sum([e in config.env for e in ENVS_WITH_GOAL]) > 0
+    
     batch_size_offline = int(config.batch_size * config.mixing_ratio)
     batch_size_online = config.batch_size - batch_size_offline
 
@@ -1064,8 +1080,8 @@ def train(config: TrainConfig):
     episode_return = 0
     episode_step = 0
 
-    eval_normalized_scores = []
-    train_normalized_scores = []
+    eval_successes = []
+    train_successes = []
 
     print("Offline pretraining")
     for t in range(int(config.offline_iterations) + int(config.online_iterations)):
@@ -1082,7 +1098,7 @@ def train(config: TrainConfig):
                 )
             )
             action = action.cpu().data.numpy().flatten()
-            next_state, reward, done, _ = env.step(action)
+            next_state, reward, done, env_infos = env.step(action)
 
             episode_return += reward
             real_done = False  # Episode can timeout which is different from done
@@ -1096,14 +1112,16 @@ def train(config: TrainConfig):
 
             if done:
                 state, done = env.reset(), False
+                # Valid only for envs with goal, e.g. AntMaze, Adroit
+                if is_env_with_goal:
+                    goal_achieved = is_goal_reached(reward, env_infos)
+                    train_successes.append(goal_achieved)
+                    online_log["train/regret"] = np.mean(1 - np.array(train_successes))
+                    online_log["train/is_success"] = float(goal_achieved)
                 online_log["train/episode_return"] = episode_return
                 normalized_return = eval_env.get_normalized_score(episode_return)
                 online_log["train/d4rl_normalized_episode_return"] = (
                     normalized_return * 100.0
-                )
-                train_normalized_scores.append(normalized_return)
-                online_log["train/regret"] = np.mean(
-                    1 - np.clip(train_normalized_scores, 0, 1)
                 )
                 online_log["train/episode_length"] = episode_step
                 episode_return = 0
@@ -1129,7 +1147,7 @@ def train(config: TrainConfig):
         # Evaluate episode
         if (t + 1) % config.eval_freq == 0:
             print(f"Time steps: {t + 1}")
-            eval_scores = eval_actor(
+            eval_scores, success_rate = eval_actor(
                 eval_env,
                 actor,
                 device=config.device,
@@ -1139,11 +1157,11 @@ def train(config: TrainConfig):
             eval_score = eval_scores.mean()
             eval_log = {}
             normalized = eval_env.get_normalized_score(np.mean(eval_scores))
-            if t >= config.offline_iterations:
-                eval_normalized_scores.append(normalized)
-                eval_log["eval/regret"] = np.mean(
-                    1 - np.clip(eval_normalized_scores, 0, 1)
-                )
+            # Valid only for envs with goal, e.g. AntMaze, Adroit
+            if t >= config.offline_iterations and is_env_with_goal:
+                eval_successes.append(success_rate)
+                eval_log["eval/regret"] = np.mean(1 - np.array(train_successes))
+                eval_log["eval/success_rate"] = success_rate
             normalized_eval_score = normalized * 100.0
             eval_log["eval/d4rl_normalized_score"] = normalized_eval_score
             evaluations.append(normalized_eval_score)
