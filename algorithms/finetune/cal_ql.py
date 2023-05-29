@@ -20,7 +20,7 @@ import wandb
 
 TensorBatch = List[torch.Tensor]
 
-ENVS_WITH_GOAL = ["antmaze", "pen", "door", "hammer", "relocate"]
+ENVS_WITH_GOAL = ("antmaze", "pen", "door", "hammer", "relocate")
 
 
 @dataclass
@@ -952,8 +952,7 @@ def train(config: TrainConfig):
     env = gym.make(config.env)
     eval_env = gym.make(config.env)
 
-    is_env_with_goal = sum([e in config.env for e in ENVS_WITH_GOAL]) > 0
-    
+    is_env_with_goal = config.env.startswith(ENVS_WITH_GOAL)
     batch_size_offline = int(config.batch_size * config.mixing_ratio)
     batch_size_online = config.batch_size - batch_size_offline
 
