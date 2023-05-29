@@ -9,6 +9,7 @@ on:
       - dev
       - develop
       - main
+      - cal-ql
 
 
 jobs:
