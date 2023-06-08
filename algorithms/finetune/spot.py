@@ -167,7 +167,14 @@ class ReplayBuffer:
         dones = self._dones[indices]
         return [states, actions, rewards, next_states, dones]
 
-    def add_transition(self, state, action, reward, next_state, done):
+    def add_transition(
+        self,
+        state: np.ndarray,
+        action: np.ndarray,
+        reward: float,
+        next_state: np.ndarray,
+        done: bool,
+    ):
         # Use this method to add new data into the replay buffer during fine-tuning.
         self._states[self._pointer] = self._to_tensor(state)
         self._actions[self._pointer] = self._to_tensor(action)
@@ -179,7 +186,7 @@ class ReplayBuffer:
         self._size = min(self._size + 1, self._buffer_size)
 
 
-def set_env_seed(env: Optional[gym.Env], seed):
+def set_env_seed(env: Optional[gym.Env], seed: int):
     env.seed(seed)
     env.action_space.seed(seed)
 
@@ -239,7 +246,7 @@ def eval_actor(
     return np.asarray(episode_rewards), np.mean(successes)
 
 
-def return_reward_range(dataset, max_episode_steps):
+def return_reward_range(dataset: Dict, max_episode_steps: int) -> Tuple[float, float]:
     returns, lengths = [], []
     ep_ret, ep_len = 0.0, 0
     for r, d in zip(dataset["rewards"], dataset["terminals"]):
@@ -254,7 +261,7 @@ def return_reward_range(dataset, max_episode_steps):
     return min(returns), max(returns)
 
 
-def modify_reward(dataset, env_name, max_episode_steps=1000):
+def modify_reward(dataset: Dict, env_name: str, max_episode_steps: int = 1000) -> Dict:
     if any(s in env_name for s in ("halfcheetah", "hopper", "walker2d")):
         min_ret, max_ret = return_reward_range(dataset, max_episode_steps)
         dataset["rewards"] /= max_ret - min_ret
@@ -269,7 +276,7 @@ def modify_reward(dataset, env_name, max_episode_steps=1000):
     return {}
 
 
-def modify_reward_online(reward, env_name, **kwargs):
+def modify_reward_online(reward: float, env_name: str, **kwargs) -> float:
     if any(s in env_name for s in ("halfcheetah", "hopper", "walker2d")):
         reward /= kwargs["max_ret"] - kwargs["min_ret"]
         reward *= kwargs["max_episode_steps"]
