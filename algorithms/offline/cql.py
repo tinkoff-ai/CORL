@@ -831,7 +831,7 @@ def train(config: TrainConfig):
             dataset,
             config.env,
             reward_scale=config.reward_scale,
-            reward_bias=config.reward_bias
+            reward_bias=config.reward_bias,
         )
 
     if config.normalize:
