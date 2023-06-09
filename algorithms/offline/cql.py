@@ -58,6 +58,8 @@ class TrainConfig:
     normalize: bool = True  # Normalize states
     normalize_reward: bool = False  # Normalize reward
     q_n_hidden_layers: int = 3  # Number of hidden layers in Q networks
+    reward_scale: float = 1.0  # Reward scale for normalization
+    reward_bias: float = 0.0  # Reward bias for normalization
     # Wandb logging
     project: str = "CORL"
     group: str = "CQL-D4RL"
@@ -231,13 +233,14 @@ def modify_reward(
     dataset: Dict,
     env_name: str,
     max_episode_steps: int = 1000,
+    reward_scale: float = 1.0,
+    reward_bias: float = 0.0,
 ):
     if any(s in env_name for s in ("halfcheetah", "hopper", "walker2d")):
         min_ret, max_ret = return_reward_range(dataset, max_episode_steps)
         dataset["rewards"] /= max_ret - min_ret
         dataset["rewards"] *= max_episode_steps
-    elif "antmaze" in env_name:
-        dataset["rewards"] = dataset["rewards"] * 10.0 - 5.0
+    dataset["rewards"] = dataset["rewards"] * reward_scale + reward_bias
 
 
 def extend_and_repeat(tensor: torch.Tensor, dim: int, repeat: int) -> torch.Tensor:
@@ -824,7 +827,12 @@ def train(config: TrainConfig):
     dataset = d4rl.qlearning_dataset(env)
 
     if config.normalize_reward:
-        modify_reward(dataset, config.env)
+        modify_reward(
+            dataset,
+            config.env,
+            reward_scale=config.reward_scale,
+            reward_bias=config.reward_bias
+        )
 
     if config.normalize:
         state_mean, state_std = compute_mean_std(dataset["observations"], eps=1e-3)
