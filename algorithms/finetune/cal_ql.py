@@ -1132,7 +1132,7 @@ def train(config: TrainConfig):
                     reward_scale=config.reward_scale,
                     reward_bias=config.reward_bias,
                     **reward_mod_dict,
-                 )
+                )
             online_buffer.add_transition(state, action, reward, next_state, real_done)
             state = next_state
 
