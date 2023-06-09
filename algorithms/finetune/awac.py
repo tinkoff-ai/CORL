@@ -247,7 +247,11 @@ class AdvantageWeightedActorCritic:
         self._awac_lambda = awac_lambda
         self._exp_adv_max = exp_adv_max
 
-    def _actor_loss(self, states, actions):
+    def _actor_loss(
+        self,
+        states: torch.Tensor,
+        actions: torch.Tensor,
+    ) -> torch.Tensor:
         with torch.no_grad():
             pi_action, _ = self._actor(states)
             v = torch.min(
@@ -266,7 +270,14 @@ class AdvantageWeightedActorCritic:
         loss = (-action_log_prob * weights).mean()
         return loss
 
-    def _critic_loss(self, states, actions, rewards, dones, next_states):
+    def _critic_loss(
+        self,
+        states: torch.Tensor,
+        actions: torch.Tensor,
+        rewards: torch.Tensor,
+        dones: torch.Tensor,
+        next_states: torch.Tensor,
+    ) -> torch.Tensor:
         with torch.no_grad():
             next_actions, _ = self._actor(next_states)
 
@@ -284,7 +295,14 @@ class AdvantageWeightedActorCritic:
         loss = q1_loss + q2_loss
         return loss
 
-    def _update_critic(self, states, actions, rewards, dones, next_states):
+    def _update_critic(
+        self,
+        states: torch.Tensor,
+        actions: torch.Tensor,
+        rewards: torch.Tensor,
+        dones: torch.Tensor,
+        next_states: torch.Tensor,
+    ):
         loss = self._critic_loss(states, actions, rewards, dones, next_states)
         self._critic_1_optimizer.zero_grad()
         self._critic_2_optimizer.zero_grad()
@@ -358,7 +376,7 @@ def wrap_env(
     return env
 
 
-def is_goal_reached(reward, info):
+def is_goal_reached(reward: float, info: Dict) -> bool:
     if "goal_achieved" in info:
         return info["goal_achieved"]
     return reward > 0  # Assuming that reaching target is a positive reward
