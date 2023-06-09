@@ -63,6 +63,8 @@ class TrainConfig:
     normalize: bool = True  # Normalize states
     normalize_reward: bool = False  # Normalize reward
     q_n_hidden_layers: int = 2  # Number of hidden layers in Q networks
+    reward_scale: float = 1.0  # Reward scale for normalization
+    reward_bias: float = 0.0  # Reward bias for normalization
     # Wandb logging
     project: str = "CORL"
     group: str = "CQL-D4RL"
@@ -261,27 +263,38 @@ def return_reward_range(dataset: Dict, max_episode_steps: int) -> Tuple[float, f
     return min(returns), max(returns)
 
 
-def modify_reward(dataset: Dict, env_name: str, max_episode_steps: int = 1000) -> Dict:
+def modify_reward(
+    dataset: Dict,
+    env_name: str,
+    max_episode_steps: int = 1000,
+    reward_scale: float = 1.0,
+    reward_bias: float = 0.0,
+) -> Dict:
+    modification_data = {}
     if any(s in env_name for s in ("halfcheetah", "hopper", "walker2d")):
         min_ret, max_ret = return_reward_range(dataset, max_episode_steps)
         dataset["rewards"] /= max_ret - min_ret
         dataset["rewards"] *= max_episode_steps
-        return {
+        modification_data = {
             "max_ret": max_ret,
             "min_ret": min_ret,
             "max_episode_steps": max_episode_steps,
         }
-    elif "antmaze" in env_name:
-        dataset["rewards"] = dataset["rewards"] * 10.0 - 5.0
-    return {}
+    dataset["rewards"] = dataset["rewards"] * reward_scale + reward_bias
+    return modification_data
 
 
-def modify_reward_online(reward: float, env_name: str, **kwargs) -> float:
+def modify_reward_online(
+        reward: float,
+        env_name: str,
+        reward_scale: float = 1.0,
+        reward_bias: float = 0.0,
+        **kwargs,
+) -> float:
     if any(s in env_name for s in ("halfcheetah", "hopper", "walker2d")):
         reward /= kwargs["max_ret"] - kwargs["min_ret"]
         reward *= kwargs["max_episode_steps"]
-    elif "antmaze" in env_name:
-        reward = reward * 10.0 - 5.0
+    reward = reward * reward_scale + reward_bias
     return reward
 
 
@@ -875,7 +888,12 @@ def train(config: TrainConfig):
 
     reward_mod_dict = {}
     if config.normalize_reward:
-        reward_mod_dict = modify_reward(dataset, config.env)
+        reward_mod_dict = modify_reward(
+            dataset,
+            config.env,
+            reward_scale=config.reward_scale,
+            reward_bias=config.reward_bias,
+        )
 
     if config.normalize:
         state_mean, state_std = compute_mean_std(dataset["observations"], eps=1e-3)
@@ -1008,7 +1026,13 @@ def train(config: TrainConfig):
                 real_done = True
 
             if config.normalize_reward:
-                reward = modify_reward_online(reward, config.env, **reward_mod_dict)
+                reward = modify_reward_online(
+                    reward,
+                    config.env,
+                    reward_scale=config.reward_scale,
+                    reward_bias=config.reward_bias,
+                    **reward_mod_dict,
+                )
             replay_buffer.add_transition(state, action, reward, next_state, real_done)
             state = next_state
 
