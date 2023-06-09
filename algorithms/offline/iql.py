@@ -48,6 +48,9 @@ class TrainConfig:
     iql_deterministic: bool = False  # Use deterministic actor
     normalize: bool = True  # Normalize states
     normalize_reward: bool = False  # Normalize reward
+    vf_lr: float = 3e-4  # V function learning rate
+    qf_lr: float = 3e-4  # Critic learning rate
+    actor_lr: float = 3e-4  # Actor learning rate
     # Wandb logging
     project: str = "CORL"
     group: str = "IQL-D4RL"
@@ -409,12 +412,12 @@ class ImplicitQLearning:
 
     def _update_q(
         self,
-        next_v,
-        observations,
-        actions,
-        rewards,
-        terminals,
-        log_dict,
+        next_v: torch.Tensor,
+        observations: torch.Tensor,
+        actions: torch.Tensor,
+        rewards: torch.Tensor,
+        terminals: torch.Tensor,
+        log_dict: Dict,
     ):
         targets = rewards + (1.0 - terminals.float()) * self.discount * next_v.detach()
         qs = self.qf.both(observations, actions)
@@ -427,7 +430,13 @@ class ImplicitQLearning:
         # Update target Q network
         soft_update(self.q_target, self.qf, self.tau)
 
-    def _update_policy(self, adv, observations, actions, log_dict):
+    def _update_policy(
+        self,
+        adv: torch.Tensor,
+        observations: torch.Tensor,
+        actions: torch.Tensor,
+        log_dict: Dict,
+    ):
         exp_adv = torch.exp(self.beta * adv.detach()).clamp(max=EXP_ADV_MAX)
         policy_out = self.actor(observations)
         if isinstance(policy_out, torch.distributions.Distribution):
@@ -547,9 +556,9 @@ def train(config: TrainConfig):
         if config.iql_deterministic
         else GaussianPolicy(state_dim, action_dim, max_action)
     ).to(config.device)
-    v_optimizer = torch.optim.Adam(v_network.parameters(), lr=3e-4)
-    q_optimizer = torch.optim.Adam(q_network.parameters(), lr=3e-4)
-    actor_optimizer = torch.optim.Adam(actor.parameters(), lr=3e-4)
+    v_optimizer = torch.optim.Adam(v_network.parameters(), lr=config.vf_lr)
+    q_optimizer = torch.optim.Adam(q_network.parameters(), lr=config.qf_lr)
+    actor_optimizer = torch.optim.Adam(actor.parameters(), lr=config.actor_lr)
 
     kwargs = {
         "max_action": max_action,
