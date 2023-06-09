@@ -387,7 +387,7 @@ class VAE(nn.Module):
 
     def decode(
         self,
-        state,
+        state: torch.Tensor,
         z: torch.Tensor = None,
     ) -> torch.Tensor:
         # When sampling from the VAE, the latent vector is clipped to [-0.5, 0.5]
@@ -779,7 +779,7 @@ def train(config: TrainConfig):
     }
 
     print("---------------------------------------")
-    print(f"Training TD3 + BC, Env: {config.env}, Seed: {seed}")
+    print(f"Training SPOT, Env: {config.env}, Seed: {seed}")
     print("---------------------------------------")
 
     # Initialize actor
