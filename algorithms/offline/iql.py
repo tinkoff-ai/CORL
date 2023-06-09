@@ -13,7 +13,7 @@ import gym
 import numpy as np
 import pyrallis
 import torch
-from torch.distributions import MultivariateNormal
+from torch.distributions import Normal
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -23,7 +23,7 @@ TensorBatch = List[torch.Tensor]
 
 
 EXP_ADV_MAX = 100.0
-LOG_STD_MIN = -5.0
+LOG_STD_MIN = -20.0
 LOG_STD_MAX = 2.0
 
 
@@ -286,11 +286,10 @@ class GaussianPolicy(nn.Module):
         self.log_std = nn.Parameter(torch.zeros(act_dim, dtype=torch.float32))
         self.max_action = max_action
 
-    def forward(self, obs: torch.Tensor) -> MultivariateNormal:
+    def forward(self, obs: torch.Tensor) -> Normal:
         mean = self.net(obs)
         std = torch.exp(self.log_std.clamp(LOG_STD_MIN, LOG_STD_MAX))
-        scale_tril = torch.diag(std)
-        return MultivariateNormal(mean, scale_tril=scale_tril)
+        return Normal(mean, std)
 
     @torch.no_grad()
     def act(self, state: np.ndarray, device: str = "cpu"):
@@ -403,7 +402,7 @@ class ImplicitQLearning:
         adv = target_q - v
         v_loss = asymmetric_l2_loss(adv, self.iql_tau)
         log_dict["value_loss"] = v_loss.item()
-        self.v_optimizer.zero_grad(set_to_none=True)
+        self.v_optimizer.zero_grad()
         v_loss.backward()
         self.v_optimizer.step()
         return adv
@@ -421,7 +420,7 @@ class ImplicitQLearning:
         qs = self.qf.both(observations, actions)
         q_loss = sum(F.mse_loss(q, targets) for q in qs) / len(qs)
         log_dict["q_loss"] = q_loss.item()
-        self.q_optimizer.zero_grad(set_to_none=True)
+        self.q_optimizer.zero_grad()
         q_loss.backward()
         self.q_optimizer.step()
 
@@ -432,7 +431,7 @@ class ImplicitQLearning:
         exp_adv = torch.exp(self.beta * adv.detach()).clamp(max=EXP_ADV_MAX)
         policy_out = self.actor(observations)
         if isinstance(policy_out, torch.distributions.Distribution):
-            bc_losses = -policy_out.log_prob(actions)
+            bc_losses = -policy_out.log_prob(actions).sum(-1, keepdim=False)
         elif torch.is_tensor(policy_out):
             if policy_out.shape != actions.shape:
                 raise RuntimeError("Actions shape missmatch")
@@ -441,7 +440,7 @@ class ImplicitQLearning:
             raise NotImplementedError
         policy_loss = torch.mean(exp_adv * bc_losses)
         log_dict["actor_loss"] = policy_loss.item()
-        self.actor_optimizer.zero_grad(set_to_none=True)
+        self.actor_optimizer.zero_grad()
         policy_loss.backward()
         self.actor_optimizer.step()
         self.actor_lr_schedule.step()
