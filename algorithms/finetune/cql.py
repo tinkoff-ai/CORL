@@ -285,11 +285,11 @@ def modify_reward(
 
 
 def modify_reward_online(
-        reward: float,
-        env_name: str,
-        reward_scale: float = 1.0,
-        reward_bias: float = 0.0,
-        **kwargs,
+    reward: float,
+    env_name: str,
+    reward_scale: float = 1.0,
+    reward_bias: float = 0.0,
+    **kwargs,
 ) -> float:
     if any(s in env_name for s in ("halfcheetah", "hopper", "walker2d")):
         reward /= kwargs["max_ret"] - kwargs["min_ret"]
