@@ -1,3 +1,4 @@
+actor_lr: 3e-4
 actor_dropout: 0.1
 batch_size: 256
 beta: 3.0
@@ -17,6 +18,8 @@ n_episodes: 10
 name: IQL_door-cloned-v1
 normalize: true
 normalize_reward: false
+qf_lr: 3e-4
 project: CORL
 seed: 0
 tau: 0.005
+vf_lr: 3e-4
