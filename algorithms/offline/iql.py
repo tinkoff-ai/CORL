@@ -51,6 +51,7 @@ class TrainConfig:
     vf_lr: float = 3e-4  # V function learning rate
     qf_lr: float = 3e-4  # Critic learning rate
     actor_lr: float = 3e-4  # Actor learning rate
+    actor_dropout: Optional[float] = None  # Adroit uses dropout for policy network
     # Wandb logging
     project: str = "CORL"
     group: str = "IQL-D4RL"
@@ -249,6 +250,7 @@ class MLP(nn.Module):
         activation_fn: Callable[[], nn.Module] = nn.ReLU,
         output_activation_fn: Callable[[], nn.Module] = None,
         squeeze_output: bool = False,
+        dropout: Optional[float] = None,
     ):
         super().__init__()
         n_dims = len(dims)
@@ -259,6 +261,10 @@ class MLP(nn.Module):
         for i in range(n_dims - 2):
             layers.append(nn.Linear(dims[i], dims[i + 1]))
             layers.append(activation_fn())
+
+            if dropout is not None:
+                layers.append(nn.Dropout(dropout))
+
         layers.append(nn.Linear(dims[-2], dims[-1]))
         if output_activation_fn is not None:
             layers.append(output_activation_fn())
@@ -280,6 +286,7 @@ class GaussianPolicy(nn.Module):
         max_action: float,
         hidden_dim: int = 256,
         n_hidden: int = 2,
+        dropout: Optional[float] = None,
     ):
         super().__init__()
         self.net = MLP(
@@ -311,11 +318,13 @@ class DeterministicPolicy(nn.Module):
         max_action: float,
         hidden_dim: int = 256,
         n_hidden: int = 2,
+        dropout: Optional[float] = None,
     ):
         super().__init__()
         self.net = MLP(
             [state_dim, *([hidden_dim] * n_hidden), act_dim],
             output_activation_fn=nn.Tanh,
+            dropout=dropout,
         )
         self.max_action = max_action
 
@@ -552,9 +561,13 @@ def train(config: TrainConfig):
     q_network = TwinQ(state_dim, action_dim).to(config.device)
     v_network = ValueFunction(state_dim).to(config.device)
     actor = (
-        DeterministicPolicy(state_dim, action_dim, max_action)
+        DeterministicPolicy(
+            state_dim, action_dim, max_action, dropout=config.actor_dropout
+        )
         if config.iql_deterministic
-        else GaussianPolicy(state_dim, action_dim, max_action)
+        else GaussianPolicy(
+            state_dim, action_dim, max_action, dropout=config.actor_dropout
+        )
     ).to(config.device)
     v_optimizer = torch.optim.Adam(v_network.parameters(), lr=config.vf_lr)
     q_optimizer = torch.optim.Adam(q_network.parameters(), lr=config.qf_lr)
