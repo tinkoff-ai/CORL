@@ -8,7 +8,7 @@ from rliable import library as rly, metrics, plot_utils
 import seaborn as sns
 
 dataframe = pd.read_csv("runs_tables/offline_urls.csv")
-with open('bin/offline_scores.pickle', 'rb') as handle:
+with open("bin/offline_scores.pickle", "rb") as handle:
     full_scores = pickle.load(handle)
 
 os.makedirs("./out", exist_ok=True)
@@ -182,7 +182,7 @@ def get_table(scores, stds, pm="$\\pm$", delim=" & ", row_delim="\\midrule", row
     ]
     prev_env = "halfcheetah"
     for data in ordered_datasets:
-        env = data.split('-')[0]
+        env = data.split("-")[0]
         if env != prev_env:
             if len(row_delim) > 0:
                 rows.append(row_delim)
@@ -211,20 +211,20 @@ print(get_table(max_scores, max_stds, "±", "|", "", "|", "|"))
 
 os.makedirs("out", exist_ok=True)
 
-plt.rcParams['figure.figsize'] = (15, 8)
-plt.rcParams['figure.dpi'] = 300
+plt.rcParams["figure.figsize"] = (15, 8)
+plt.rcParams["figure.dpi"] = 300
 sns.set(style="ticks", font_scale=1.5)
 
 
 linestyles = [
-    ('solid', 'solid'),
-    ('dotted', (0, (1, 1))),
-    ('long dash with offset', (5, (10, 3))),
-    ('densely dashed', (0, (5, 1))),
+    ("solid", "solid"),
+    ("dotted", (0, (1, 1))),
+    ("long dash with offset", (5, (10, 3))),
+    ("densely dashed", (0, (5, 1))),
 
-    ('densely dashdotted', (0, (3, 1, 1, 1))),
+    ("densely dashdotted", (0, (3, 1, 1, 1))),
 
-    ('densely dashdotdotted', (0, (3, 1, 1, 1, 1, 1)))
+    ("densely dashdotdotted", (0, (3, 1, 1, 1, 1, 1)))
 ]
 
 for data in datasets:
@@ -251,28 +251,28 @@ for data in datasets:
             plt.fill_between(steps, to_draw - std_draw, to_draw + std_draw, alpha=0.1)
 
     plt.title(data)
-    plt.xlabel('Fraction of total steps')
-    plt.ylabel('Normalized score')
+    plt.xlabel("Fraction of total steps")
+    plt.ylabel("Normalized score")
     plt.ylim([min_score - 3, max_score + 3])
-    plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
     plt.grid()
-    plt.savefig(f"out/{data}.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"out/{data}.pdf", dpi=300, bbox_inches="tight")
     # plt.show()
     plt.close()
 
 
 def convert_dataset_name(name):
-    name = name.replace('v2', '')
-    name = name.replace('v1', '')
-    name = name.replace('v0', '')
-    name = name.replace('medium-', 'm-')
-    name = name.replace('umaze-', 'u-')
-    name = name.replace('large-', 'l-')
-    name = name.replace('replay-', 're-')
-    name = name.replace('random-', 'ra-')
-    name = name.replace('expert-', 'e-')
-    name = name.replace('play-', 'p-')
-    name = name.replace('diverse-', 'd-')
+    name = name.replace("v2", "")
+    name = name.replace("v1", "")
+    name = name.replace("v0", "")
+    name = name.replace("medium-", "m-")
+    name = name.replace("umaze-", "u-")
+    name = name.replace("large-", "l-")
+    name = name.replace("replay-", "re-")
+    name = name.replace("random-", "ra-")
+    name = name.replace("expert-", "e-")
+    name = name.replace("play-", "p-")
+    name = name.replace("diverse-", "d-")
     return name[:-1]
 
 
@@ -293,10 +293,10 @@ def plot_bars(scores, save_name):
             line = convert_dataset_name(f"{env}-{data}")
             for algo in algorithms:
                 agg_l.append([algo, line, scores[algo][f"{env}-{data}"]])
-    df_agg = pd.DataFrame(agg_l, columns=['Algorithm', 'Dataset', 'Normalized Score'])
+    df_agg = pd.DataFrame(agg_l, columns=["Algorithm", "Dataset", "Normalized Score"])
 
     sns.set(style="ticks", font_scale=2)
-    plt.rcParams['figure.figsize'] = (20, 10)  # (10, 6)
+    plt.rcParams["figure.figsize"] = (20, 10)  # (10, 6)
 
     b = sns.barplot(data=df_agg[df_agg.Dataset.apply(lambda x: "cheetah" in x or "hopper" in x or "walker" in x)],
                     x="Dataset", y="Normalized Score", hue="Algorithm")
@@ -307,7 +307,7 @@ def plot_bars(scores, save_name):
     plt.legend(fontsize=10)
     plt.xticks(rotation=45)
     sns.move_legend(b, "upper left", bbox_to_anchor=(1, 1))
-    plt.savefig(f"out/bars_{save_name}_loco.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"out/bars_{save_name}_loco.pdf", dpi=300, bbox_inches="tight")
     # plt.show()
     plt.close()
 
@@ -321,7 +321,7 @@ def plot_bars(scores, save_name):
     sns.move_legend(b, "upper left", bbox_to_anchor=(1, 1))
     plt.grid()
 
-    plt.savefig(f"out/bars_{save_name}_maze.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"out/bars_{save_name}_maze.pdf", dpi=300, bbox_inches="tight")
     # plt.show()
     plt.close()
 
@@ -335,7 +335,7 @@ def plot_bars(scores, save_name):
     sns.move_legend(b, "upper left", bbox_to_anchor=(1, 1))
     plt.grid()
 
-    plt.savefig(f"out/bars_{save_name}_ant.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"out/bars_{save_name}_ant.pdf", dpi=300, bbox_inches="tight")
     # plt.show()
     plt.close()
 
@@ -349,7 +349,7 @@ def plot_bars(scores, save_name):
     plt.legend(fontsize=10)
     plt.xticks(rotation=45)
     sns.move_legend(b, "upper left", bbox_to_anchor=(1, 1))
-    plt.savefig(f"out/bars_{save_name}_adroit.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"out/bars_{save_name}_adroit.pdf", dpi=300, bbox_inches="tight")
     # plt.show()
     plt.close()
 
@@ -373,12 +373,12 @@ def flatten(data):
 
 flat = flatten(full_scores)
 
-plt.rcParams['figure.figsize'] = (10, 6)
-plt.rcParams['figure.dpi'] = 300
+plt.rcParams["figure.figsize"] = (10, 6)
+plt.rcParams["figure.dpi"] = 300
 sns.set(style="ticks", font_scale=0.5)
 plt.rcParams.update({
-    # 'font.family': 'serif',
-    'font.serif': 'Times New Roman'
+    # "font.family": "serif",
+    "font.serif": "Times New Roman"
 })
 # sns.set_palette("tab19")
 
@@ -396,12 +396,12 @@ fig, ax = plt.subplots(ncols=1, figsize=(7, 5))
 plot_utils.plot_performance_profiles(
     score_distributions, thresholds,
     performance_profile_cis=score_distributions_cis,
-    colors=dict(zip(algorithms, sns.color_palette('colorblind'))),
-    xlabel=r'D4RL Normalized Score $(\tau)$',
+    colors=dict(zip(algorithms, sns.color_palette("colorblind"))),
+    xlabel=r"D4RL Normalized Score $(\tau)$",
     ax=ax,
     legend=True
 )
-plt.savefig("out/perf_profiles_offline.pdf", dpi=300, bbox_inches='tight')
+plt.savefig("out/perf_profiles_offline.pdf", dpi=300, bbox_inches="tight")
 plt.close()
 
 algorithm_pairs = {
@@ -415,5 +415,5 @@ average_probabilities, average_prob_cis = rly.get_interval_estimates(
     algorithm_pairs, metrics.probability_of_improvement, reps=200)
 ax = plot_utils.plot_probability_of_improvement(average_probabilities, average_prob_cis)
 # ax.set_xlim(0.5, 0.8)
-plt.savefig("out/improvement_probability_offline.pdf", dpi=300, bbox_inches='tight')
+plt.savefig("out/improvement_probability_offline.pdf", dpi=300, bbox_inches="tight")
 plt.close()

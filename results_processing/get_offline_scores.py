@@ -37,11 +37,13 @@ def get_run_scores(run_id, is_dt=False):
 def process_runs(df):
     algorithms = df["algorithm"].unique()
     datasets = df["dataset"].unique()
-    full_scores = {
-        algo: {ds: [] for ds in datasets} for algo in algorithms
-    }
-    for index, row in tqdm(df.iterrows(), desc="Runs scores downloading", position=0, leave=True):
-        full_scores[row["algorithm"]][row["dataset"]].append(get_run_scores(row["url"], row["algorithm"] == "DT"))
+    full_scores = {algo: {ds: [] for ds in datasets} for algo in algorithms}
+    for index, row in tqdm(
+        df.iterrows(), desc="Runs scores downloading", position=0, leave=True
+    ):
+        full_scores[row["algorithm"]][row["dataset"]].append(
+            get_run_scores(row["url"], row["algorithm"] == "DT")
+        )
     return full_scores
 
 
@@ -50,5 +52,5 @@ full_scores = process_runs(dataframe)
 
 os.makedirs("bin", exist_ok=True)
 
-with open('bin/offline_scores.pickle', 'wb') as handle:
+with open("bin/offline_scores.pickle", "wb") as handle:
     pickle.dump(full_scores, handle, protocol=pickle.HIGHEST_PROTOCOL)

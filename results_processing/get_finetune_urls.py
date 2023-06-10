@@ -7,6 +7,7 @@ collected_urls = {
     "url": [],
 }
 
+
 def get_urls(sweep_id, algo_name):
     s = sweep_id
     api = wandb.Api(timeout=39)
@@ -18,7 +19,7 @@ def get_urls(sweep_id, algo_name):
         elif "env_name" in run.config:
             dataset = run.config["env_name"]
         name = algo_name
-        if "10" in "-".join(run.name.split('-')[:-1]):
+        if "10" in "-".join(run.name.split("-")[:-1]):
             name = "10% " + name
         if "medium" not in dataset:
             if "cheetah" in dataset or "hopper" in dataset or "walker" in dataset:
@@ -28,6 +29,7 @@ def get_urls(sweep_id, algo_name):
             collected_urls["algorithm"].append(name)
             collected_urls["dataset"].append(dataset)
             collected_urls["url"].append(run.url.replace("https://wandb.ai/", ""))
+
 
 get_urls("tlab/CORL/sweeps/7c42z4dz", "SPOT")
 
