@@ -4,10 +4,8 @@ import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from rliable import library as rly, metrics, plot_utils
 import seaborn as sns
-from rliable import library as rly
-from rliable import metrics
-from rliable import plot_utils
 
 dataframe = pd.read_csv("runs_tables/finetune_urls.csv")
 with open('bin/finetune_scores.pickle', 'rb') as handle:
@@ -175,8 +173,25 @@ def get_table(scores, stds, pm="$\\pm$", delim=" & ", row_delim="\\midrule", row
 
 
 print(get_table(last_offline_scores, last_offline_stds, scores2=last_online_scores, stds2=last_online_stds))
-
+print()
 print(get_table(regrets, regrets_std, "$\\pm$"))
+print()
+print(
+    get_table(
+        last_offline_scores,
+        last_offline_stds,
+        "±",
+        "|",
+        "",
+        "|",
+        "|",
+        scores2=last_online_scores,
+        stds2=last_online_stds,
+        scores_delim=" -> ",
+    )
+)
+print()
+print(get_table(regrets, regrets_std, "±", "|", "", "|", "|"))
 
 """# Tunning plots"""
 

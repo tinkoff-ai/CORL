@@ -4,10 +4,8 @@ import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from rliable import library as rly, metrics, plot_utils
 import seaborn as sns
-from rliable import library as rly
-from rliable import metrics
-from rliable import plot_utils
 
 dataframe = pd.read_csv("runs_tables/offline_urls.csv")
 with open('bin/offline_scores.pickle', 'rb') as handle:
@@ -202,11 +200,11 @@ def get_table(scores, stds, pm="$\\pm$", delim=" & ", row_delim="\\midrule", row
 
 
 print(get_table(last_scores, last_stds))
-
+print()
 print(get_table(max_scores, max_stds))
-
+print()
 print(get_table(last_scores, last_stds, "±", "|", "", "|", "|"))
-
+print()
 print(get_table(max_scores, max_stds, "±", "|", "", "|", "|"))
 
 
