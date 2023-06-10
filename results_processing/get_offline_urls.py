@@ -19,7 +19,7 @@ def get_urls(sweep_id, algo_name):
         elif "env_name" in run.config:
             dataset = run.config["env_name"]
         name = algo_name
-        if "10" in "-".join(run.name.split('-')[:-1]):
+        if "10" in "-".join(run.name.split("-")[:-1]):
             name = "10% " + name
         if "medium" not in dataset:
             if "cheetah" in dataset or "hopper" in dataset or "walker" in dataset:

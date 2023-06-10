@@ -181,13 +181,13 @@ ordered_datasets = [
 
 
 def get_table(
-        scores,
-        stds,
-        pm="$\\pm$",
-        delim=" & ",
-        row_delim="\\midrule",
-        row_end=" \\\\",
-        row_begin=""
+    scores,
+    stds,
+    pm="$\\pm$",
+    delim=" & ",
+    row_delim="\\midrule",
+    row_end=" \\\\",
+    row_begin="",
 ):
     rows = [row_begin + delim.join(["Task Name"] + algorithms) + row_end]
     prev_env = "halfcheetah"
@@ -308,7 +308,7 @@ def plot_bars(scores, save_name):
                 "medium-play-v2",
                 "medium-diverse-v2",
                 "large-play-v2",
-                 "large-diverse-v2",
+                "large-diverse-v2",
             ]
         else:
             datas = ["human-v1", "cloned-v1", "expert-v1"]
@@ -360,8 +360,14 @@ def plot_bars(scores, save_name):
     # plt.show()
     plt.close()
 
-    b = sns.barplot(data=df_agg[df_agg.Dataset.apply(lambda x: "ant" in x)], x="Dataset", y="Normalized Score",
-                    hue="Algorithm")
+    b = sns.barplot(
+        data=df_agg[
+            df_agg.Dataset.apply(lambda x: "ant" in x)
+        ],
+        x="Dataset",
+        y="Normalized Score",
+        hue="Algorithm",
+    )
     # plt.tight_layout()
     plt.xticks(fontsize=30)
     plt.yticks(fontsize=30)

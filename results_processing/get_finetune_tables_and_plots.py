@@ -147,16 +147,16 @@ ordered_datasets = [
 
 
 def get_table(
-        scores,
-        stds,
-        pm="$\\pm$",
-        delim=" & ",
-        row_delim="\\midrule",
-        row_end=" \\\\",
-        row_begin="",
-        scores2=None,
-        stds2=None,
-        scores_delim=" $\\to$ ",
+    scores,
+    stds,
+    pm="$\\pm$",
+    delim=" & ",
+    row_delim="\\midrule",
+    row_end=" \\\\",
+    row_begin="",
+    scores2=None,
+    stds2=None,
+    scores_delim=" $\\to$ ",
 ):
     rows = [row_begin + delim.join(["Task Name"] + algorithms) + row_end]
     prev_env = "halfcheetah"
