@@ -15,7 +15,7 @@ cql_target_action_gap: 5.0
 cql_temp: 1.0
 device: cuda
 discount: 0.99
-env: door-expert-v1
+env: relocate-expert-v1
 eval_freq: 5000
 group: cql-relocate-expert-v1-multiseed-v0
 load_model: ''
