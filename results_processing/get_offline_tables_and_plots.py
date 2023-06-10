@@ -361,9 +361,7 @@ def plot_bars(scores, save_name):
     plt.close()
 
     b = sns.barplot(
-        data=df_agg[
-            df_agg.Dataset.apply(lambda x: "ant" in x)
-        ],
+        data=df_agg[df_agg.Dataset.apply(lambda x: "ant" in x)],
         x="Dataset",
         y="Normalized Score",
         hue="Algorithm",
