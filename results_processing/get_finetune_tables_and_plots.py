@@ -147,16 +147,16 @@ ordered_datasets = [
 
 
 def get_table(
-    scores,
-    stds,
-    pm="$\\pm$",
-    delim=" & ",
-    row_delim="\\midrule",
-    row_end=" \\\\",
-    row_begin="",
-    scores2=None,
-    stds2=None,
-    scores_delim=" $\\to$ ",
+        scores,
+        stds,
+        pm="$\\pm$",
+        delim=" & ",
+        row_delim="\\midrule",
+        row_end=" \\\\",
+        row_begin="",
+        scores2=None,
+        stds2=None,
+        scores_delim=" $\\to$ ",
 ):
     rows = [row_begin + delim.join(["Task Name"] + algorithms) + row_end]
     prev_env = "halfcheetah"
@@ -197,7 +197,8 @@ print(
         last_offline_scores,
         last_offline_stds,
         scores2=last_online_scores,
-        stds2=last_online_stds)
+        stds2=last_online_stds,
+    )
 )
 print()
 print(get_table(regrets, regrets_std, "$\\pm$"))
@@ -235,14 +236,11 @@ linestyles = [
     ("dotted", (0, (1, 1))),
     ("long dash with offset", (5, (10, 3))),
     ("densely dashed", (0, (5, 1))),
-
     ("densely dashdotted", (0, (3, 1, 1, 1))),
-
-    ("densely dashdotdotted", (0, (3, 1, 1, 1, 1, 1)))
+    ("densely dashdotdotted", (0, (3, 1, 1, 1, 1, 1))),
 ]
 
 for data in datasets:
-
     min_score = 1e6
     max_score = -1e6
     for i, algo in enumerate(algorithms):
@@ -301,8 +299,14 @@ def plot_bars(scores, save_name):
         elif "maze2d" in env:
             datas = ["umaze-v1", "medium-v1", "large-v1"]
         elif "antmaze" in env:
-            datas = ["umaze-v2", "umaze-diverse-v2", "medium-play-v2", "medium-diverse-v2", "large-play-v2",
-                     "large-diverse-v2"]
+            datas = [
+                "umaze-v2",
+                "umaze-diverse-v2",
+                "medium-play-v2",
+                "medium-diverse-v2",
+                "large-play-v2",
+                "large-diverse-v2",
+            ]
         else:
             datas = ["cloned-v1"]
         for data in datas:
@@ -335,10 +339,13 @@ def plot_bars(scores, save_name):
     b = sns.barplot(
         data=df_agg[
             df_agg.Dataset.apply(
-            lambda x: "pen" in x or "hammer" in x or "door" in x or "relocate" in x
+                lambda x: "pen" in x or "hammer" in x or "door" in x or "relocate" in x
             )
         ],
-        x="Dataset", y="Normalized Score", hue="Algorithm")
+        x="Dataset",
+        y="Normalized Score",
+        hue="Algorithm",
+    )
     plt.grid()
     # plt.tight_layout()
     plt.xticks(fontsize=30)
@@ -356,13 +363,13 @@ plot_bars(last_online_scores, "last_online")
 plt.rcParams["figure.figsize"] = (10, 6)
 plt.rcParams["figure.dpi"] = 300
 sns.set(style="ticks", font_scale=0.5)
-plt.rcParams.update({
-    # "font.family": "serif",
-    "font.serif": "Times New Roman"
-})
+plt.rcParams.update(
+    {
+        # "font.family": "serif",
+        "font.serif": "Times New Roman"
+    }
+)
 
-
-# sns.set_palette("tab19")
 
 def flatten(data):
     res = {}
@@ -397,7 +404,7 @@ plot_utils.plot_performance_profiles(
     colors=dict(zip(algorithms, sns.color_palette("colorblind"))),
     xlabel=r"D4RL Normalized Score $(\tau)$",
     ax=ax,
-    legend=True
+    legend=True,
 )
 plt.savefig("out/perf_profiles_online.pdf", dpi=300, bbox_inches="tight")
 

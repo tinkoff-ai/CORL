@@ -15,12 +15,8 @@ os.makedirs("./out", exist_ok=True)
 
 
 def get_average_scores(scores):
-    avg_scores = {
-        algo: {ds: None for ds in scores[algo]} for algo in scores
-    }
-    stds = {
-        algo: {ds: None for ds in scores[algo]} for algo in scores
-    }
+    avg_scores = {algo: {ds: None for ds in scores[algo]} for algo in scores}
+    stds = {algo: {ds: None for ds in scores[algo]} for algo in scores}
     for algo in scores:
         for data in scores[algo]:
             sc = scores[algo][data]
@@ -35,12 +31,8 @@ def get_average_scores(scores):
 
 
 def get_max_scores(scores):
-    avg_scores = {
-        algo: {ds: None for ds in scores[algo]} for algo in scores
-    }
-    stds = {
-        algo: {ds: None for ds in scores[algo]} for algo in scores
-    }
+    avg_scores = {algo: {ds: None for ds in scores[algo]} for algo in scores}
+    stds = {algo: {ds: None for ds in scores[algo]} for algo in scores}
     for algo in scores:
         for data in scores[algo]:
             sc = scores[algo][data]
@@ -57,12 +49,18 @@ def get_max_scores(scores):
 
 def get_last_scores(avg_scores, avg_stds):
     last_scores = {
-        algo: {ds: avg_scores[algo][ds][-1] if avg_scores[algo][ds] is not None else None for ds in avg_scores[algo]}
+        algo: {
+            ds: avg_scores[algo][ds][-1] if avg_scores[algo][ds] is not None else None
+            for ds in avg_scores[algo]
+        }
         for algo in avg_scores
     }
     stds = {
-        algo: {ds: avg_stds[algo][ds][-1] if avg_stds[algo][ds] is not None else None for ds in avg_scores[algo]} for
-        algo in avg_scores
+        algo: {
+            ds: avg_stds[algo][ds][-1] if avg_stds[algo][ds] is not None else None
+            for ds in avg_scores[algo]
+        }
+        for algo in avg_scores
     }
     return last_scores, stds
 
@@ -75,7 +73,8 @@ last_scores, last_stds = get_last_scores(avg_scores, avg_stds)
 def add_domains_avg(scores):
     for algo in scores:
         locomotion = [
-            scores[algo][data] for data in [
+            scores[algo][data]
+            for data in [
                 "halfcheetah-medium-v2",
                 "halfcheetah-medium-replay-v2",
                 "halfcheetah-medium-expert-v2",
@@ -88,7 +87,8 @@ def add_domains_avg(scores):
             ]
         ]
         antmaze = [
-            scores[algo][data] for data in [
+            scores[algo][data]
+            for data in [
                 "antmaze-umaze-v2",
                 "antmaze-umaze-diverse-v2",
                 "antmaze-medium-play-v2",
@@ -98,7 +98,8 @@ def add_domains_avg(scores):
             ]
         ]
         maze2d = [
-            scores[algo][data] for data in [
+            scores[algo][data]
+            for data in [
                 "maze2d-umaze-v1",
                 "maze2d-medium-v1",
                 "maze2d-large-v1",
@@ -106,7 +107,8 @@ def add_domains_avg(scores):
         ]
 
         adroit = [
-            scores[algo][data] for data in [
+            scores[algo][data]
+            for data in [
                 "pen-human-v1",
                 "pen-cloned-v1",
                 "pen-expert-v1",
@@ -127,7 +129,9 @@ def add_domains_avg(scores):
         scores[algo]["maze2d avg"] = np.mean(maze2d)
         scores[algo]["adroit avg"] = np.mean(adroit)
 
-        scores[algo]["total avg"] = np.mean(np.hstack((locomotion, antmaze, maze2d, adroit)))
+        scores[algo]["total avg"] = np.mean(
+            np.hstack((locomotion, antmaze, maze2d, adroit))
+        )
 
 
 add_domains_avg(last_scores)
@@ -176,10 +180,16 @@ ordered_datasets = [
 """# Tables"""
 
 
-def get_table(scores, stds, pm="$\\pm$", delim=" & ", row_delim="\\midrule", row_end=" \\\\", row_begin=""):
-    rows = [
-        row_begin + delim.join(["Task Name"] + algorithms) + row_end
-    ]
+def get_table(
+        scores,
+        stds,
+        pm="$\\pm$",
+        delim=" & ",
+        row_delim="\\midrule",
+        row_end=" \\\\",
+        row_begin=""
+):
+    rows = [row_begin + delim.join(["Task Name"] + algorithms) + row_end]
     prev_env = "halfcheetah"
     for data in ordered_datasets:
         env = data.split("-")[0]
@@ -207,8 +217,6 @@ print(get_table(last_scores, last_stds, "±", "|", "", "|", "|"))
 print()
 print(get_table(max_scores, max_stds, "±", "|", "", "|", "|"))
 
-
-
 os.makedirs("out", exist_ok=True)
 
 plt.rcParams["figure.figsize"] = (15, 8)
@@ -221,14 +229,11 @@ linestyles = [
     ("dotted", (0, (1, 1))),
     ("long dash with offset", (5, (10, 3))),
     ("densely dashed", (0, (5, 1))),
-
     ("densely dashdotted", (0, (3, 1, 1, 1))),
-
-    ("densely dashdotdotted", (0, (3, 1, 1, 1, 1, 1)))
+    ("densely dashdotdotted", (0, (3, 1, 1, 1, 1, 1))),
 ]
 
 for data in datasets:
-
     min_score = 1e6
     max_score = -1e6
     for i, algo in enumerate(algorithms):
@@ -247,7 +252,9 @@ for data in datasets:
             steps = np.linspace(0, 1, len(to_draw))
             min_score = min(min_score, np.min(to_draw))
             max_score = max(max_score, np.max(to_draw))
-            plt.plot(steps, to_draw, label=algo, linestyle=linestyles[i % len(linestyles)][1])
+            plt.plot(
+                steps, to_draw, label=algo, linestyle=linestyles[i % len(linestyles)][1]
+            )
             plt.fill_between(steps, to_draw - std_draw, to_draw + std_draw, alpha=0.1)
 
     plt.title(data)
@@ -279,14 +286,30 @@ def convert_dataset_name(name):
 def plot_bars(scores, save_name):
     agg_l = []
 
-    for env in ["halfcheetah", "hopper", "walker2d", "maze2d", "antmaze", "pen", "door", "hammer", "relocate"]:
+    for env in [
+        "halfcheetah",
+        "hopper",
+        "walker2d",
+        "maze2d",
+        "antmaze",
+        "pen",
+        "door",
+        "hammer",
+        "relocate",
+    ]:
         if env in ["halfcheetah", "hopper", "walker2d"]:
             datas = ["medium-v2", "medium-expert-v2", "medium-replay-v2"]
         elif "maze2d" in env:
             datas = ["umaze-v1", "medium-v1", "large-v1"]
         elif "antmaze" in env:
-            datas = ["umaze-v2", "umaze-diverse-v2", "medium-play-v2", "medium-diverse-v2", "large-play-v2",
-                     "large-diverse-v2"]
+            datas = [
+                "umaze-v2",
+                "umaze-diverse-v2",
+                "medium-play-v2",
+                "medium-diverse-v2",
+                "large-play-v2",
+                 "large-diverse-v2",
+            ]
         else:
             datas = ["human-v1", "cloned-v1", "expert-v1"]
         for data in datas:
@@ -298,8 +321,16 @@ def plot_bars(scores, save_name):
     sns.set(style="ticks", font_scale=2)
     plt.rcParams["figure.figsize"] = (20, 10)  # (10, 6)
 
-    b = sns.barplot(data=df_agg[df_agg.Dataset.apply(lambda x: "cheetah" in x or "hopper" in x or "walker" in x)],
-                    x="Dataset", y="Normalized Score", hue="Algorithm")
+    b = sns.barplot(
+        data=df_agg[
+            df_agg.Dataset.apply(
+                lambda x: "cheetah" in x or "hopper" in x or "walker" in x
+            )
+        ],
+        x="Dataset",
+        y="Normalized Score",
+        hue="Algorithm",
+    )
     plt.grid()
     # plt.tight_layout()
     plt.xticks(fontsize=30)
@@ -311,8 +342,12 @@ def plot_bars(scores, save_name):
     # plt.show()
     plt.close()
 
-    b = sns.barplot(data=df_agg[df_agg.Dataset.apply(lambda x: "maze2d" in x)], x="Dataset", y="Normalized Score",
-                    hue="Algorithm")
+    b = sns.barplot(
+        data=df_agg[df_agg.Dataset.apply(lambda x: "maze2d" in x)],
+        x="Dataset",
+        y="Normalized Score",
+        hue="Algorithm",
+    )
     # plt.tight_layout()
     plt.xticks(fontsize=30)
     plt.yticks(fontsize=30)
@@ -340,8 +375,15 @@ def plot_bars(scores, save_name):
     plt.close()
 
     b = sns.barplot(
-        data=df_agg[df_agg.Dataset.apply(lambda x: "pen" in x or "hammer" in x or "door" in x or "relocate" in x)],
-        x="Dataset", y="Normalized Score", hue="Algorithm")
+        data=df_agg[
+            df_agg.Dataset.apply(
+                lambda x: "pen" in x or "hammer" in x or "door" in x or "relocate" in x
+            )
+        ],
+        x="Dataset",
+        y="Normalized Score",
+        hue="Algorithm",
+    )
     plt.grid()
     # plt.tight_layout()
     plt.xticks(fontsize=30)
@@ -353,10 +395,10 @@ def plot_bars(scores, save_name):
     # plt.show()
     plt.close()
 
+
 plot_bars(last_scores, "last")
 
 plot_bars(last_scores, "max")
-
 
 
 def flatten(data):
@@ -376,10 +418,12 @@ flat = flatten(full_scores)
 plt.rcParams["figure.figsize"] = (10, 6)
 plt.rcParams["figure.dpi"] = 300
 sns.set(style="ticks", font_scale=0.5)
-plt.rcParams.update({
-    # "font.family": "serif",
-    "font.serif": "Times New Roman"
-})
+plt.rcParams.update(
+    {
+        # "font.family": "serif",
+        "font.serif": "Times New Roman"
+    }
+)
 # sns.set_palette("tab19")
 
 algorithms = [algo for algo in flat]
@@ -389,30 +433,32 @@ normalized_score_dict = flat
 # Human normalized score thresholds
 thresholds = np.linspace(-5.0, 150.0, 31)
 score_distributions, score_distributions_cis = rly.create_performance_profile(
-    normalized_score_dict, thresholds)
+    normalized_score_dict, thresholds
+)
 # Plot score distributions
 fig, ax = plt.subplots(ncols=1, figsize=(7, 5))
 # plt.legend()
 plot_utils.plot_performance_profiles(
-    score_distributions, thresholds,
+    score_distributions,
+    thresholds,
     performance_profile_cis=score_distributions_cis,
     colors=dict(zip(algorithms, sns.color_palette("colorblind"))),
     xlabel=r"D4RL Normalized Score $(\tau)$",
     ax=ax,
-    legend=True
+    legend=True,
 )
 plt.savefig("out/perf_profiles_offline.pdf", dpi=300, bbox_inches="tight")
 plt.close()
 
-algorithm_pairs = {
-}
+algorithm_pairs = {}
 sns.set(style="ticks", font_scale=0.5)
 algs = ["AWAC", "EDAC", "SAC-N", "CQL", "TD3+BC", "DT", "BC", "10% BC"]
 for a1 in ["IQL"]:
     for a2 in algs:
         algorithm_pairs[f"{a1},{a2}"] = (flat[a1], flat[a2])
 average_probabilities, average_prob_cis = rly.get_interval_estimates(
-    algorithm_pairs, metrics.probability_of_improvement, reps=200)
+    algorithm_pairs, metrics.probability_of_improvement, reps=200
+)
 ax = plot_utils.plot_probability_of_improvement(average_probabilities, average_prob_cis)
 # ax.set_xlim(0.5, 0.8)
 plt.savefig("out/improvement_probability_offline.pdf", dpi=300, bbox_inches="tight")
