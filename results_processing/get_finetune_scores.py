@@ -30,20 +30,20 @@ def get_run_scores(run_id, is_dt=False):
             else:
                 score_key = k
                 break
-    for i, row in run.history(keys=[score_key], samples=5000).iterrows():
+    for _, row in run.history(keys=[score_key], samples=5000).iterrows():
         full_scores.append(row[score_key])
-    for i, row in run.history(keys=["eval/regret"], samples=5000).iterrows():
+    for _, row in run.history(keys=["eval/regret"], samples=5000).iterrows():
         if "eval/regret" in row:
             regret = row["eval/regret"]
-    l = len(full_scores) // 2
-    return full_scores[:l], full_scores[l:], regret
+    offline_iters = len(full_scores) // 2
+    return full_scores[:offline_iters], full_scores[offline_iters:], regret
 
 
 def process_runs(df):
     algorithms = df["algorithm"].unique()
     datasets = df["dataset"].unique()
     full_scores = {algo: {ds: [] for ds in datasets} for algo in algorithms}
-    for index, row in tqdm(
+    for _, row in tqdm(
         df.iterrows(), desc="Runs scores downloading", position=0, leave=True
     ):
         full_scores[row["algorithm"]][row["dataset"]].append(

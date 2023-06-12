@@ -38,7 +38,7 @@ def process_runs(df):
     algorithms = df["algorithm"].unique()
     datasets = df["dataset"].unique()
     full_scores = {algo: {ds: [] for ds in datasets} for algo in algorithms}
-    for index, row in tqdm(
+    for _, row in tqdm(
         df.iterrows(), desc="Runs scores downloading", position=0, leave=True
     ):
         full_scores[row["algorithm"]][row["dataset"]].append(

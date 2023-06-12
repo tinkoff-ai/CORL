@@ -172,17 +172,15 @@ def get_table(
         for algo in algorithms:
             if data in stds[algo]:
                 row.append(
-                    f"{scores[algo][data]:.2f} {pm} {stds[algo][data]:.2f}"
-                    + (
+                    f"{scores[algo][data]:.2f} {pm} {stds[algo][data]:.2f}" + (
                         ""
-                        if scores2 is None
-                        else f"{scores_delim} {scores2[algo][data]:.2f} {pm} {stds2[algo][data]:.2f}"
+                        if scores2 is None else
+                        f"{scores_delim} {scores2[algo][data]:.2f} {pm} {stds2[algo][data]:.2f}"
                     )
                 )
             else:
                 row.append(
-                    f"{scores[algo][data]:.2f}"
-                    + (
+                    f"{scores[algo][data]:.2f}" + (
                         ""
                         if scores2 is None
                         else f"{scores_delim} {scores2[algo][data]:.2f}"
@@ -385,7 +383,7 @@ def flatten(data):
 
 flat = flatten(full_online_scores)
 
-algorithms = [algo for algo in flat]
+algorithms = list(flat)
 
 normalized_score_dict = flat
 

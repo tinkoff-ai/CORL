@@ -82,7 +82,7 @@ get_urls("tlab/CORL/sweeps/sg1hx5v7", "DT")
 get_urls("tlab/CORL/sweeps/nev3j9wx", "EDAC")
 
 # OLD RUNS
-## BC
+# BC
 collected_urls["algorithm"].append("BC")
 collected_urls["dataset"].append("maze2d-large-v1")
 collected_urls["url"].append("tlab/CORL/runs/gae6mjr6")
@@ -275,7 +275,7 @@ collected_urls["algorithm"].append("BC")
 collected_urls["dataset"].append("walker2d-medium-expert-v2")
 collected_urls["url"].append("tlab/CORL/runs/2rv6pvln")
 
-## 10% BC
+# 10% BC
 collected_urls["algorithm"].append("10% BC")
 collected_urls["dataset"].append("maze2d-large-v1")
 collected_urls["url"].append("tlab/CORL/runs/84b74c6e-bc52-4083-a601-6a387726c61d")
@@ -468,7 +468,7 @@ collected_urls["algorithm"].append("10% BC")
 collected_urls["dataset"].append("walker2d-medium-expert-v2")
 collected_urls["url"].append("tlab/CORL/runs/df22f73b-3904-4d3d-be82-8565a94f90a9")
 
-##
+#
 collected_urls["algorithm"].append("TD3+BC")
 collected_urls["dataset"].append("maze2d-large-v1")
 collected_urls["url"].append("tlab/CORL/runs/3gmwuspv")
@@ -661,7 +661,7 @@ collected_urls["algorithm"].append("TD3+BC")
 collected_urls["dataset"].append("walker2d-medium-expert-v2")
 collected_urls["url"].append("tlab/CORL/runs/1v789w9r")
 
-##
+#
 collected_urls["algorithm"].append("DT")
 collected_urls["dataset"].append("maze2d-large-v1")
 collected_urls["url"].append("tlab/CORL/runs/f5447eae-38f5-404e-ab97-979d12a62dba")
@@ -854,7 +854,7 @@ collected_urls["algorithm"].append("DT")
 collected_urls["dataset"].append("walker2d-medium-expert-v2")
 collected_urls["url"].append("tlab/CORL/runs/3bc164b8-1fc0-4ce5-a32d-701e522ad5b1")
 
-##
+#
 collected_urls["algorithm"].append("SAC-N")
 collected_urls["dataset"].append("maze2d-large-v1")
 collected_urls["url"].append("tlab/CORL/runs/a7e3d2a0-2dbc-4eba-b28d-8315f992bae3")
@@ -1047,7 +1047,7 @@ collected_urls["algorithm"].append("SAC-N")
 collected_urls["dataset"].append("walker2d-medium-expert-v2")
 collected_urls["url"].append("tlab/CORL/runs/e36a72da-482f-4a70-803f-1a0d7eccb265")
 
-##
+#
 collected_urls["algorithm"].append("EDAC")
 collected_urls["dataset"].append("maze2d-large-v1")
 collected_urls["url"].append("tlab/CORL/runs/1m3k2bd1")
@@ -1240,7 +1240,7 @@ collected_urls["algorithm"].append("EDAC")
 collected_urls["dataset"].append("walker2d-medium-expert-v2")
 collected_urls["url"].append("tlab/CORL/runs/d5f5f415-9d1b-4d35-b4e5-c1cf278af46c")
 
-##
+#
 collected_urls["algorithm"].append("AWAC")
 collected_urls["dataset"].append("maze2d-large-v1")
 collected_urls["url"].append("tlab/CORL/runs/3me14n0w")
