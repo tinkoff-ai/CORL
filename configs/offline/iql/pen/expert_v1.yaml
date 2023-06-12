@@ -19,4 +19,5 @@ normalize_reward: false
 qf_lr: 3e-4
 project: CORL
 seed: 0
-tau: 0.005vf_lr: 3e-4
+tau: 0.005
+vf_lr: 3e-4
