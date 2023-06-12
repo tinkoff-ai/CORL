@@ -1,0 +1,17 @@
+batch_size: 256
+buffer_size: 10000000
+checkpoints_path: null
+device: cuda
+discount: 0.99
+env: door-expert-v1
+eval_freq: 5000
+frac: 1.0
+group: bc-door-expert-v1-multiseed-v0
+load_model: ''
+max_timesteps: 1000000
+max_traj_len: 1000
+n_episodes: 10
+name: BC
+normalize: true
+project: CORL
+seed: 0
