@@ -430,7 +430,7 @@ plt.rcParams.update(
 )
 # sns.set_palette("tab19")
 
-algorithms = list(algo for algo in flat)
+algorithms = list(flat)
 
 normalized_score_dict = flat
 

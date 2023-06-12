@@ -29,7 +29,7 @@ def get_run_scores(run_id, is_dt=False):
             else:
                 score_key = k
                 break
-    for i, row in run.history(keys=[score_key], samples=5000).iterrows():
+    for _, row in run.history(keys=[score_key], samples=5000).iterrows():
         all_scores.append(row[score_key])
     return all_scores
 

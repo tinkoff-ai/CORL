@@ -176,7 +176,7 @@ def get_table(
                     + (  # noqa
                         ""
                         if scores2 is None
-                        else f"{scores_delim} {scores2[algo][data]:.2f} {pm} {stds2[algo][data]:.2f}"
+                        else f"{scores_delim} {scores2[algo][data]:.2f} {pm} {stds2[algo][data]:.2f}"  # noqa
                     )
                 )
             else:
