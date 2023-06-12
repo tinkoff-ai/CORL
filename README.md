@@ -44,6 +44,9 @@ docker run --gpus=all -it --rm --name <container_name> <image_name>
 | ✅ [Q-Ensemble for Offline RL: Don't Scale the Ensemble, Scale the Batch Size <br>(LB-SAC)](https://arxiv.org/abs/2211.11092)   | [`offline/lb_sac.py`](algorithms/offline/lb_sac.py)                                                      | [`Offline Gym-MuJoCo`](https://wandb.ai/tlab/CORL/reports/LB-SAC-D4RL-Results--VmlldzozNjIxMDY1)
 
 
+## Reproducing figures and tables
+In case you need to reproduce figures and tables from the paper or want to reuse our results see [`results_processing`](results_processing).
+
 ## D4RL Benchmarks
 For learning curves and all the details, you can check the links above. Here, we report reproduced **final** and **best** scores. Note that thay differ by a big margin, and some papers may use different approaches not making it always explicit which one reporting methodology they chose.
 
