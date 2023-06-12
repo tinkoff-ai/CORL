@@ -468,7 +468,7 @@ def train(config: TrainConfig):
             if hasattr(env, "get_normalized_score"):
                 normalized_eval_scores = env.get_normalized_score(eval_scores) * 100.0
                 wandb.log(
-                    {"normalized_eval_score": normalized_eval_scores.mean()}, step=t
+                    {"d4rl_normalized_score": normalized_eval_scores.mean()}, step=t
                 )
 
             if config.checkpoints_path is not None:
