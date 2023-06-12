@@ -1,0 +1,17 @@
+batch_size: 256
+buffer_size: 10000000
+checkpoints_path: null
+device: cuda
+discount: 1.0
+env: pen-cloned-v1
+eval_freq: 5000
+frac: 0.1
+group: bc-10-pen-cloned-v1-multiseed-v0
+load_model: ''
+max_timesteps: 1000000
+max_traj_len: 1000
+n_episodes: 10
+name: BC-10
+normalize: true
+project: CORL
+seed: 0
