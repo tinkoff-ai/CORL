@@ -9,7 +9,7 @@ cql_clip_diff_min: -.inf
 cql_importance_sample: true
 cql_lagrange: true
 cql_max_target_backup: false
-cql_min_q_weight: 10.0
+cql_alpha: 10.0
 cql_n_actions: 10
 cql_target_action_gap: 5.0
 cql_temp: 1.0

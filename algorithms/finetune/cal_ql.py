@@ -1,6 +1,5 @@
-# source: https://github.com/young-geng/CQL/tree/934b0e8354ca431d6c083c4e3a29df88d4b0a24d
-# STRONG UNDER-PERFORMANCE ON PART OF ANTMAZE TASKS. BUT IN IQL PAPER IT WORKS SOMEHOW
-# https://arxiv.org/pdf/2006.04779.pdf
+# source: https://github.com/nakamotoo/Cal-QL/tree/main
+# https://arxiv.org/pdf/2303.05479.pdf
 from typing import Any, Dict, List, Optional, Tuple, Union
 from copy import deepcopy
 from dataclasses import asdict, dataclass
@@ -21,6 +20,8 @@ import wandb
 
 TensorBatch = List[torch.Tensor]
 
+ENVS_WITH_GOAL = ("antmaze", "pen", "door", "hammer", "relocate")
+
 
 @dataclass
 class TrainConfig:
@@ -28,12 +29,13 @@ class TrainConfig:
     device: str = "cuda"
     env: str = "halfcheetah-medium-expert-v2"  # OpenAI gym environment name
     seed: int = 0  # Sets Gym, PyTorch and Numpy seeds
+    eval_seed: int = 0  # Eval environment seed
     eval_freq: int = int(5e3)  # How often (time steps) we evaluate
     n_episodes: int = 10  # How many episodes run during evaluation
-    max_timesteps: int = int(1e6)  # Max time steps to run environment
+    offline_iterations: int = int(1e6)  # Number of offline updates
+    online_iterations: int = int(1e6)  # Number of online updates
     checkpoints_path: Optional[str] = None  # Save path
     load_model: str = ""  # Model load file name, "" doesn't load
-
     # CQL
     buffer_size: int = 2_000_000  # Replay buffer size
     batch_size: int = 256  # Batch size for all networks
@@ -44,33 +46,30 @@ class TrainConfig:
     policy_lr: float = 3e-5  # Policy learning rate
     qf_lr: float = 3e-4  # Critics learning rate
     soft_target_update_rate: float = 5e-3  # Target network update rate
+    bc_steps: int = int(0)  # Number of BC steps at start
     target_update_period: int = 1  # Frequency of target nets updates
+    cql_alpha: float = 10.0  # CQL offline regularization parameter
+    cql_alpha_online: float = 10.0  # CQL online regularization parameter
     cql_n_actions: int = 10  # Number of sampled actions
     cql_importance_sample: bool = True  # Use importance sampling
     cql_lagrange: bool = False  # Use Lagrange version of CQL
     cql_target_action_gap: float = -1.0  # Action gap
     cql_temp: float = 1.0  # CQL temperature
-    cql_alpha: float = 10.0  # Minimal Q weight
     cql_max_target_backup: bool = False  # Use max target backup
     cql_clip_diff_min: float = -np.inf  # Q-function lower loss clipping
     cql_clip_diff_max: float = np.inf  # Q-function upper loss clipping
     orthogonal_init: bool = True  # Orthogonal initialization
     normalize: bool = True  # Normalize states
     normalize_reward: bool = False  # Normalize reward
-    q_n_hidden_layers: int = 3  # Number of hidden layers in Q networks
+    q_n_hidden_layers: int = 2  # Number of hidden layers in Q networks
     reward_scale: float = 1.0  # Reward scale for normalization
     reward_bias: float = 0.0  # Reward bias for normalization
-
-    # AntMaze hacks
-    bc_steps: int = int(0)  # Number of BC steps at start
-    reward_scale: float = 5.0
-    reward_bias: float = -1.0
-    policy_log_std_multiplier: float = 1.0
-
+    # Cal-QL
+    mixing_ratio: float = 0.5  # Data mixing ratio for online tuning
     # Wandb logging
     project: str = "CORL"
-    group: str = "CQL-D4RL"
-    name: str = "CQL"
+    group: str = "Cal-QL-D4RL"
+    name: str = "Cal-QL"
 
     def __post_init__(self):
         self.name = f"{self.name}-{self.env}-{str(uuid.uuid4())[:8]}"
@@ -138,6 +137,10 @@ class ReplayBuffer:
             (buffer_size, state_dim), dtype=torch.float32, device=device
         )
         self._dones = torch.zeros((buffer_size, 1), dtype=torch.float32, device=device)
+        self._mc_returns = torch.zeros(
+            (buffer_size, 1), dtype=torch.float32, device=device
+        )
+
         self._device = device
 
     def _to_tensor(self, data: np.ndarray) -> torch.Tensor:
@@ -157,32 +160,52 @@ class ReplayBuffer:
         self._rewards[:n_transitions] = self._to_tensor(data["rewards"][..., None])
         self._next_states[:n_transitions] = self._to_tensor(data["next_observations"])
         self._dones[:n_transitions] = self._to_tensor(data["terminals"][..., None])
+        self._mc_returns[:n_transitions] = self._to_tensor(data["mc_returns"][..., None])
         self._size += n_transitions
         self._pointer = min(self._size, n_transitions)
 
         print(f"Dataset size: {n_transitions}")
 
     def sample(self, batch_size: int) -> TensorBatch:
-        indices = np.random.randint(0, min(self._size, self._pointer), size=batch_size)
+        indices = np.random.randint(0, self._size, size=batch_size)
         states = self._states[indices]
         actions = self._actions[indices]
         rewards = self._rewards[indices]
         next_states = self._next_states[indices]
         dones = self._dones[indices]
-        return [states, actions, rewards, next_states, dones]
+        mc_returns = self._mc_returns[indices]
+        return [states, actions, rewards, next_states, dones, mc_returns]
 
-    def add_transition(self):
+    def add_transition(
+        self,
+        state: np.ndarray,
+        action: np.ndarray,
+        reward: float,
+        next_state: np.ndarray,
+        done: bool,
+    ):
         # Use this method to add new data into the replay buffer during fine-tuning.
-        # I left it unimplemented since now we do not do fine-tuning.
-        raise NotImplementedError
+        self._states[self._pointer] = self._to_tensor(state)
+        self._actions[self._pointer] = self._to_tensor(action)
+        self._rewards[self._pointer] = self._to_tensor(reward)
+        self._next_states[self._pointer] = self._to_tensor(next_state)
+        self._dones[self._pointer] = self._to_tensor(done)
+        self._mc_returns[self._pointer] = 0.0
+
+        self._pointer = (self._pointer + 1) % self._buffer_size
+        self._size = min(self._size + 1, self._buffer_size)
+
+
+def set_env_seed(env: Optional[gym.Env], seed: int):
+    env.seed(seed)
+    env.action_space.seed(seed)
 
 
 def set_seed(
     seed: int, env: Optional[gym.Env] = None, deterministic_torch: bool = False
 ):
     if env is not None:
-        env.seed(seed)
-        env.action_space.seed(seed)
+        set_env_seed(env, seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
     random.seed(seed)
@@ -201,24 +224,36 @@ def wandb_init(config: dict) -> None:
     wandb.run.save()
 
 
+def is_goal_reached(reward: float, info: Dict) -> bool:
+    if "goal_achieved" in info:
+        return info["goal_achieved"]
+    return reward > 0  # Assuming that reaching target is a positive reward
+
+
 @torch.no_grad()
 def eval_actor(
     env: gym.Env, actor: nn.Module, device: str, n_episodes: int, seed: int
-) -> np.ndarray:
+) -> Tuple[np.ndarray, np.ndarray]:
     env.seed(seed)
     actor.eval()
     episode_rewards = []
+    successes = []
     for _ in range(n_episodes):
         state, done = env.reset(), False
         episode_reward = 0.0
+        goal_achieved = False
         while not done:
             action = actor.act(state, device)
-            state, reward, done, _ = env.step(action)
+            state, reward, done, env_infos = env.step(action)
             episode_reward += reward
+            if not goal_achieved:
+                goal_achieved = is_goal_reached(reward, env_infos)
+                # Valid only for environments with goal
+        successes.append(float(goal_achieved))
         episode_rewards.append(episode_reward)
 
     actor.train()
-    return np.asarray(episode_rewards)
+    return np.asarray(episode_rewards), np.mean(successes)
 
 
 def return_reward_range(dataset: Dict, max_episode_steps: int) -> Tuple[float, float]:
@@ -236,40 +271,83 @@ def return_reward_range(dataset: Dict, max_episode_steps: int) -> Tuple[float, f
     return min(returns), max(returns)
 
 
+def get_return_to_go(dataset: Dict, gamma: float, max_episode_steps: int) -> List[float]:
+    returns = []
+    ep_ret, ep_len = 0.0, 0
+    cur_rewards = []
+    terminals = []
+    for r, d in zip(dataset["rewards"], dataset["terminals"]):
+        ep_ret += float(r)
+        cur_rewards.append(float(r))
+        terminals.append(float(d))
+        ep_len += 1
+        if d or ep_len == max_episode_steps:
+            discounted_returns = [0] * ep_len
+            prev_return = 0
+            for i in reversed(range(ep_len)):
+                discounted_returns[i] = cur_rewards[i] + gamma * prev_return * (
+                    1 - terminals[i]
+                )
+                prev_return = discounted_returns[i]
+            returns += discounted_returns
+            ep_ret, ep_len = 0.0, 0
+            cur_rewards = []
+            terminals = []
+    discounted_returns = [0] * ep_len
+    prev_return = 0
+    for i in reversed(range(ep_len)):
+        discounted_returns[i] = cur_rewards[i] + gamma * prev_return * (1 - terminals[i])
+        prev_return = discounted_returns[i]
+    returns += discounted_returns
+    return returns
+
+
 def modify_reward(
     dataset: Dict,
     env_name: str,
     max_episode_steps: int = 1000,
     reward_scale: float = 1.0,
     reward_bias: float = 0.0,
-):
+) -> Dict:
+    modification_data = {}
     if any(s in env_name for s in ("halfcheetah", "hopper", "walker2d")):
         min_ret, max_ret = return_reward_range(dataset, max_episode_steps)
         dataset["rewards"] /= max_ret - min_ret
         dataset["rewards"] *= max_episode_steps
+        modification_data = {
+            "max_ret": max_ret,
+            "min_ret": min_ret,
+            "max_episode_steps": max_episode_steps,
+        }
     dataset["rewards"] = dataset["rewards"] * reward_scale + reward_bias
+    return modification_data
+
+
+def modify_reward_online(
+    reward: float,
+    env_name: str,
+    reward_scale: float = 1.0,
+    reward_bias: float = 0.0,
+    **kwargs,
+) -> float:
+    if any(s in env_name for s in ("halfcheetah", "hopper", "walker2d")):
+        reward /= kwargs["max_ret"] - kwargs["min_ret"]
+        reward *= kwargs["max_episode_steps"]
+    reward = reward * reward_scale + reward_bias
+    return reward
 
 
 def extend_and_repeat(tensor: torch.Tensor, dim: int, repeat: int) -> torch.Tensor:
     return tensor.unsqueeze(dim).repeat_interleave(repeat, dim=dim)
 
 
-def init_module_weights(module: torch.nn.Sequential, orthogonal_init: bool = False):
-    # Specific orthgonal initialization for inner layers
-    # If orthogonal init is off, we do not change default initialization
-    if orthogonal_init:
-        for submodule in module[:-1]:
-            if isinstance(submodule, nn.Linear):
-                nn.init.orthogonal_(submodule.weight, gain=np.sqrt(2))
-                nn.init.constant_(submodule.bias, 0.0)
-
-    # Lasy layers should be initialzied differently as well
-    if orthogonal_init:
-        nn.init.orthogonal_(module[-1].weight, gain=1e-2)
-    else:
-        nn.init.xavier_uniform_(module[-1].weight, gain=1e-2)
-
-    nn.init.constant_(module[-1].bias, 0.0)
+def init_module_weights(module: torch.nn.Module, orthogonal_init: bool = False):
+    if isinstance(module, nn.Linear):
+        if orthogonal_init:
+            nn.init.orthogonal_(module.weight, gain=np.sqrt(2))
+            nn.init.constant_(module.bias, 0.0)
+        else:
+            nn.init.xavier_uniform_(module.weight, gain=1e-2)
 
 
 class ReparameterizedTanhGaussian(nn.Module):
@@ -345,7 +423,10 @@ class TanhGaussianPolicy(nn.Module):
             nn.Linear(256, 2 * action_dim),
         )
 
-        init_module_weights(self.base_network)
+        if orthogonal_init:
+            self.base_network.apply(lambda m: init_module_weights(m, True))
+        else:
+            init_module_weights(self.base_network[-1], False)
 
         self.log_std_multiplier = Scalar(log_std_multiplier)
         self.log_std_offset = Scalar(log_std_offset)
@@ -390,7 +471,7 @@ class FullyConnectedQFunction(nn.Module):
         observation_dim: int,
         action_dim: int,
         orthogonal_init: bool = False,
-        n_hidden_layers: int = 3,
+        n_hidden_layers: int = 2,
     ):
         super().__init__()
         self.observation_dim = observation_dim
@@ -407,7 +488,6 @@ class FullyConnectedQFunction(nn.Module):
         layers.append(nn.Linear(256, 1))
 
         self.network = nn.Sequential(*layers)
-
         if orthogonal_init:
             self.network.apply(lambda m: init_module_weights(m, True))
         else:
@@ -438,7 +518,7 @@ class Scalar(nn.Module):
         return self.constant
 
 
-class ContinuousCQL:
+class CalQL:
     def __init__(
         self,
         critic_1,
@@ -520,11 +600,15 @@ class ContinuousCQL:
             lr=self.qf_lr,
         )
 
+        self._calibration_enabled = True
         self.total_it = 0
 
     def update_target_network(self, soft_target_update_rate: float):
         soft_update(self.target_critic_1, self.critic_1, soft_target_update_rate)
         soft_update(self.target_critic_2, self.critic_2, soft_target_update_rate)
+
+    def switch_calibration(self):
+        self._calibration_enabled = not self._calibration_enabled
 
     def _alpha_and_alpha_loss(self, observations: torch.Tensor, log_pi: torch.Tensor):
         if self.use_automatic_entropy_tuning:
@@ -557,8 +641,16 @@ class ContinuousCQL:
         return policy_loss
 
     def _q_loss(
-        self, observations, actions, next_observations, rewards, dones, alpha, log_dict
-    ):
+        self,
+        observations: torch.Tensor,
+        actions: torch.Tensor,
+        next_observations: torch.Tensor,
+        rewards: torch.Tensor,
+        dones: torch.Tensor,
+        mc_returns: torch.Tensor,
+        alpha: torch.Tensor,
+        log_dict: Dict,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         q1_predicted = self.critic_1(observations, actions)
         q2_predicted = self.critic_2(observations, actions)
 
@@ -619,6 +711,32 @@ class ContinuousCQL:
         cql_q2_current_actions = self.critic_2(observations, cql_current_actions)
         cql_q1_next_actions = self.critic_1(observations, cql_next_actions)
         cql_q2_next_actions = self.critic_2(observations, cql_next_actions)
+
+        # Calibration
+        lower_bounds = mc_returns.reshape(-1, 1).repeat(
+            1, cql_q1_current_actions.shape[1]
+        )
+
+        num_vals = torch.sum(lower_bounds == lower_bounds)
+        bound_rate_cql_q1_current_actions = (
+            torch.sum(cql_q1_current_actions < lower_bounds) / num_vals
+        )
+        bound_rate_cql_q2_current_actions = (
+            torch.sum(cql_q2_current_actions < lower_bounds) / num_vals
+        )
+        bound_rate_cql_q1_next_actions = (
+            torch.sum(cql_q1_next_actions < lower_bounds) / num_vals
+        )
+        bound_rate_cql_q2_next_actions = (
+            torch.sum(cql_q2_next_actions < lower_bounds) / num_vals
+        )
+
+        """ Cal-QL: bound Q-values with MC return-to-go """
+        if self._calibration_enabled:
+            cql_q1_current_actions = torch.maximum(cql_q1_current_actions, lower_bounds)
+            cql_q2_current_actions = torch.maximum(cql_q2_current_actions, lower_bounds)
+            cql_q1_next_actions = torch.maximum(cql_q1_next_actions, lower_bounds)
+            cql_q2_next_actions = torch.maximum(cql_q2_next_actions, lower_bounds)
 
         cql_cat_q1 = torch.cat(
             [
@@ -729,6 +847,10 @@ class ContinuousCQL:
                 cql_q2_next_actions=cql_q2_next_actions.mean().item(),
                 alpha_prime_loss=alpha_prime_loss.item(),
                 alpha_prime=alpha_prime.item(),
+                bound_rate_cql_q1_current_actions=bound_rate_cql_q1_current_actions.item(),  # noqa
+                bound_rate_cql_q2_current_actions=bound_rate_cql_q2_current_actions.item(),  # noqa
+                bound_rate_cql_q1_next_actions=bound_rate_cql_q1_next_actions.item(),
+                bound_rate_cql_q2_next_actions=bound_rate_cql_q2_next_actions.item(),
             )
         )
 
@@ -741,6 +863,7 @@ class ContinuousCQL:
             rewards,
             next_observations,
             dones,
+            mc_returns,
         ) = batch
         self.total_it += 1
 
@@ -762,7 +885,14 @@ class ContinuousCQL:
 
         """ Q function loss """
         qf_loss, alpha_prime, alpha_prime_loss = self._q_loss(
-            observations, actions, next_observations, rewards, dones, alpha, log_dict
+            observations,
+            actions,
+            next_observations,
+            rewards,
+            dones,
+            mc_returns,
+            alpha,
+            log_dict,
         )
 
         if self.use_automatic_entropy_tuning:
@@ -833,19 +963,30 @@ class ContinuousCQL:
 @pyrallis.wrap()
 def train(config: TrainConfig):
     env = gym.make(config.env)
+    eval_env = gym.make(config.env)
+
+    is_env_with_goal = config.env.startswith(ENVS_WITH_GOAL)
+    batch_size_offline = int(config.batch_size * config.mixing_ratio)
+    batch_size_online = config.batch_size - batch_size_offline
+
+    max_steps = env._max_episode_steps
 
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
 
     dataset = d4rl.qlearning_dataset(env)
 
+    reward_mod_dict = {}
     if config.normalize_reward:
-        modify_reward(
+        reward_mod_dict = modify_reward(
             dataset,
             config.env,
             reward_scale=config.reward_scale,
             reward_bias=config.reward_bias,
         )
+    mc_returns = get_return_to_go(dataset, config.discount, max_episode_steps=1000)
+    dataset["mc_returns"] = np.array(mc_returns)
+    assert len(dataset["mc_returns"]) == len(dataset["rewards"])
 
     if config.normalize:
         state_mean, state_std = compute_mean_std(dataset["observations"], eps=1e-3)
@@ -859,13 +1000,20 @@ def train(config: TrainConfig):
         dataset["next_observations"], state_mean, state_std
     )
     env = wrap_env(env, state_mean=state_mean, state_std=state_std)
-    replay_buffer = ReplayBuffer(
+    eval_env = wrap_env(eval_env, state_mean=state_mean, state_std=state_std)
+    offline_buffer = ReplayBuffer(
         state_dim,
         action_dim,
         config.buffer_size,
         config.device,
     )
-    replay_buffer.load_d4rl_dataset(dataset)
+    online_buffer = ReplayBuffer(
+        state_dim,
+        action_dim,
+        config.buffer_size,
+        config.device,
+    )
+    offline_buffer.load_d4rl_dataset(dataset)
 
     max_action = float(env.action_space.high[0])
 
@@ -878,6 +1026,7 @@ def train(config: TrainConfig):
     # Set seeds
     seed = config.seed
     set_seed(seed, env)
+    set_env_seed(eval_env, config.eval_seed)
 
     critic_1 = FullyConnectedQFunction(
         state_dim,
@@ -885,18 +1034,17 @@ def train(config: TrainConfig):
         config.orthogonal_init,
         config.q_n_hidden_layers,
     ).to(config.device)
-    critic_2 = FullyConnectedQFunction(state_dim, action_dim, config.orthogonal_init).to(
-        config.device
-    )
+    critic_2 = FullyConnectedQFunction(
+        state_dim,
+        action_dim,
+        config.orthogonal_init,
+        config.q_n_hidden_layers,
+    ).to(config.device)
     critic_1_optimizer = torch.optim.Adam(list(critic_1.parameters()), config.qf_lr)
     critic_2_optimizer = torch.optim.Adam(list(critic_2.parameters()), config.qf_lr)
 
     actor = TanhGaussianPolicy(
-        state_dim,
-        action_dim,
-        max_action,
-        log_std_multiplier=config.policy_log_std_multiplier,
-        orthogonal_init=config.orthogonal_init,
+        state_dim, action_dim, max_action, orthogonal_init=config.orthogonal_init
     ).to(config.device)
     actor_optimizer = torch.optim.Adam(actor.parameters(), config.policy_lr)
 
@@ -931,11 +1079,11 @@ def train(config: TrainConfig):
     }
 
     print("---------------------------------------")
-    print(f"Training CQL, Env: {config.env}, Seed: {seed}")
+    print(f"Training Cal-QL, Env: {config.env}, Seed: {seed}")
     print("---------------------------------------")
 
     # Initialize actor
-    trainer = ContinuousCQL(**kwargs)
+    trainer = CalQL(**kwargs)
 
     if config.load_model != "":
         policy_file = Path(config.load_model)
@@ -945,23 +1093,103 @@ def train(config: TrainConfig):
     wandb_init(asdict(config))
 
     evaluations = []
-    for t in range(int(config.max_timesteps)):
-        batch = replay_buffer.sample(config.batch_size)
-        batch = [b.to(config.device) for b in batch]
+    state, done = env.reset(), False
+    episode_return = 0
+    episode_step = 0
+    goal_achieved = False
+
+    eval_successes = []
+    train_successes = []
+
+    print("Offline pretraining")
+    for t in range(int(config.offline_iterations) + int(config.online_iterations)):
+        if t == config.offline_iterations:
+            print("Online tuning")
+            trainer.switch_calibration()
+            trainer.cql_alpha = config.cql_alpha_online
+        online_log = {}
+        if t >= config.offline_iterations:
+            episode_step += 1
+            action, _ = actor(
+                torch.tensor(
+                    state.reshape(1, -1), device=config.device, dtype=torch.float32
+                )
+            )
+            action = action.cpu().data.numpy().flatten()
+            next_state, reward, done, env_infos = env.step(action)
+
+            if not goal_achieved:
+                goal_achieved = is_goal_reached(reward, env_infos)
+            episode_return += reward
+            real_done = False  # Episode can timeout which is different from done
+            if done and episode_step < max_steps:
+                real_done = True
+
+            if config.normalize_reward:
+                reward = modify_reward_online(
+                    reward,
+                    config.env,
+                    reward_scale=config.reward_scale,
+                    reward_bias=config.reward_bias,
+                    **reward_mod_dict,
+                )
+            online_buffer.add_transition(state, action, reward, next_state, real_done)
+            state = next_state
+
+            if done:
+                state, done = env.reset(), False
+                # Valid only for envs with goal, e.g. AntMaze, Adroit
+                if is_env_with_goal:
+                    train_successes.append(goal_achieved)
+                    online_log["train/regret"] = np.mean(1 - np.array(train_successes))
+                    online_log["train/is_success"] = float(goal_achieved)
+                online_log["train/episode_return"] = episode_return
+                normalized_return = eval_env.get_normalized_score(episode_return)
+                online_log["train/d4rl_normalized_episode_return"] = (
+                    normalized_return * 100.0
+                )
+                online_log["train/episode_length"] = episode_step
+                episode_return = 0
+                episode_step = 0
+                goal_achieved = False
+
+        if t < config.offline_iterations:
+            batch = offline_buffer.sample(config.batch_size)
+            batch = [b.to(config.device) for b in batch]
+        else:
+            offline_batch = offline_buffer.sample(batch_size_offline)
+            online_batch = online_buffer.sample(batch_size_online)
+            batch = [
+                torch.vstack(tuple(b)).to(config.device)
+                for b in zip(offline_batch, online_batch)
+            ]
+
         log_dict = trainer.train(batch)
+        log_dict["offline_iter" if t < config.offline_iterations else "online_iter"] = (
+            t if t < config.offline_iterations else t - config.offline_iterations
+        )
+        log_dict.update(online_log)
         wandb.log(log_dict, step=trainer.total_it)
         # Evaluate episode
         if (t + 1) % config.eval_freq == 0:
             print(f"Time steps: {t + 1}")
-            eval_scores = eval_actor(
-                env,
+            eval_scores, success_rate = eval_actor(
+                eval_env,
                 actor,
                 device=config.device,
                 n_episodes=config.n_episodes,
                 seed=config.seed,
             )
             eval_score = eval_scores.mean()
-            normalized_eval_score = env.get_normalized_score(eval_score) * 100.0
+            eval_log = {}
+            normalized = eval_env.get_normalized_score(np.mean(eval_scores))
+            # Valid only for envs with goal, e.g. AntMaze, Adroit
+            if t >= config.offline_iterations and is_env_with_goal:
+                eval_successes.append(success_rate)
+                eval_log["eval/regret"] = np.mean(1 - np.array(train_successes))
+                eval_log["eval/success_rate"] = success_rate
+            normalized_eval_score = normalized * 100.0
+            eval_log["eval/d4rl_normalized_score"] = normalized_eval_score
             evaluations.append(normalized_eval_score)
             print("---------------------------------------")
             print(
@@ -974,10 +1202,7 @@ def train(config: TrainConfig):
                     trainer.state_dict(),
                     os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"),
                 )
-            wandb.log(
-                {"d4rl_normalized_score": normalized_eval_score},
-                step=trainer.total_it,
-            )
+            wandb.log(eval_log, step=trainer.total_it)
 
 
 if __name__ == "__main__":
