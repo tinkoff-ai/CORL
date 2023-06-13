@@ -224,7 +224,7 @@ def wandb_init(config: dict) -> None:
     wandb.run.save()
 
 
-def is_goal_reached(reward, info):
+def is_goal_reached(reward: float, info: Dict) -> bool:
     if "goal_achieved" in info:
         return info["goal_achieved"]
     return reward > 0  # Assuming that reaching target is a positive reward
@@ -642,15 +642,15 @@ class CalQL:
 
     def _q_loss(
         self,
-        observations,
-        actions,
-        next_observations,
-        rewards,
-        dones,
-        mc_returns,
-        alpha,
-        log_dict,
-    ):
+        observations: torch.Tensor,
+        actions: torch.Tensor,
+        next_observations: torch.Tensor,
+        rewards: torch.Tensor,
+        dones: torch.Tensor,
+        mc_returns: torch.Tensor,
+        alpha: torch.Tensor,
+        log_dict: Dict,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         q1_predicted = self.critic_1(observations, actions)
         q2_predicted = self.critic_2(observations, actions)
 
