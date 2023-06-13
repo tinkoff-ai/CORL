@@ -2,7 +2,7 @@ env: antmaze-umaze-v2
 group: cql-antmaze-umaze-v2-multiseed-v0
 name: CQL
 project: CORL
-cql_min_q_weight: 5.0
+cql_alpha: 5.0
 cql_max_target_backup: true
 cql_target_action_gap: 0.2
 orthogonal_init: true
@@ -28,7 +28,7 @@ cql_importance_sample: true
 <<<<<<< HEAD:configs/offline/cql/pen/human_v1.yaml
 cql_lagrange: false
 cql_max_target_backup: false
-cql_min_q_weight: 1.0
+cql_alpha: 1.0
 =======
 >>>>>>> main:configs/offline/cql/antmaze/umaze_v2.yaml
 cql_n_actions: 10
