@@ -1,3 +1,4 @@
+actor_lr: 3e-4
 batch_size: 256
 beta: 3.0
 buffer_size: 10000000
@@ -16,6 +17,8 @@ name: IQL
 normalize: true
 normalize_reward: true
 project: CORL
+qf_lr: 3e-4
 seed: 0
 tau: 0.001
 
+vf_lr: 3e-4
