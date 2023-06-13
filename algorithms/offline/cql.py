@@ -1,5 +1,4 @@
 # source: https://github.com/young-geng/CQL/tree/934b0e8354ca431d6c083c4e3a29df88d4b0a24d
-# STRONG UNDER-PERFORMANCE ON PART OF ANTMAZE TASKS. BUT IN IQL PAPER IT WORKS SOMEHOW
 # https://arxiv.org/pdf/2006.04779.pdf
 from typing import Any, Dict, List, Optional, Tuple, Union
 from copy import deepcopy
@@ -408,10 +407,7 @@ class FullyConnectedQFunction(nn.Module):
 
         self.network = nn.Sequential(*layers)
 
-        if orthogonal_init:
-            self.network.apply(lambda m: init_module_weights(m, True))
-        else:
-            init_module_weights(self.network[-1], False)
+        init_module_weights(self.network, orthogonal_init)
 
     def forward(self, observations: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
         multiple_actions = False
