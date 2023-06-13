@@ -45,7 +45,7 @@ docker run --gpus=all -it --rm --name <container_name> <image_name>
 
 
 ## Reproducing figures and tables
-In case you need to reproduce figures and tables from the paper or want to reuse our results see [`results_processing`](results_processing).
+In case you need to reproduce figures and tables from the paper or want to reuse our results see [`results`](results).
 
 ## D4RL Benchmarks
 For learning curves and all the details, you can check the links above. Here, we report reproduced **final** and **best** scores. Note that thay differ by a big margin, and some papers may use different approaches not making it always explicit which one reporting methodology they chose.
