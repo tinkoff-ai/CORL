@@ -599,7 +599,8 @@ class ContinuousCQL:
         return policy_loss
 
     def _q_loss(
-        self, observations: torch.Tensor,
+        self,
+        observations: torch.Tensor,
         actions: torch.Tensor,
         next_observations: torch.Tensor,
         rewards: torch.Tensor,
