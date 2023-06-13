@@ -287,6 +287,8 @@ def convert_dataset_name(name):
     name = name.replace("expert-", "e-")
     name = name.replace("play-", "p-")
     name = name.replace("diverse-", "d-")
+    name = name.replace("human-", "h-")
+    name = name.replace("cloned-", "c-")
     return name[:-1]
 
 
