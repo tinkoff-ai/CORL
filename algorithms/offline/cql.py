@@ -57,6 +57,9 @@ class TrainConfig:
     orthogonal_init: bool = True  # Orthogonal initialization
     normalize: bool = True  # Normalize states
     normalize_reward: bool = False  # Normalize reward
+    q_n_hidden_layers: int = 3  # Number of hidden layers in Q networks
+    reward_scale: float = 1.0  # Reward scale for normalization
+    reward_bias: float = 0.0  # Reward bias for normalization
 
     # AntMaze hacks
     bc_steps: int = int(0)  # Number of BC steps at start
@@ -218,7 +221,7 @@ def eval_actor(
     return np.asarray(episode_rewards)
 
 
-def return_reward_range(dataset, max_episode_steps):
+def return_reward_range(dataset: Dict, max_episode_steps: int) -> Tuple[float, float]:
     returns, lengths = [], []
     ep_ret, ep_len = 0.0, 0
     for r, d in zip(dataset["rewards"], dataset["terminals"]):
@@ -233,13 +236,18 @@ def return_reward_range(dataset, max_episode_steps):
     return min(returns), max(returns)
 
 
-def modify_reward(dataset, env_name, bias, scale, max_episode_steps=1000):
+def modify_reward(
+    dataset: Dict,
+    env_name: str,
+    max_episode_steps: int = 1000,
+    reward_scale: float = 1.0,
+    reward_bias: float = 0.0,
+):
     if any(s in env_name for s in ("halfcheetah", "hopper", "walker2d")):
         min_ret, max_ret = return_reward_range(dataset, max_episode_steps)
         dataset["rewards"] /= max_ret - min_ret
         dataset["rewards"] *= max_episode_steps
-    elif "antmaze" in env_name:
-        dataset["rewards"] = dataset["rewards"] * scale + bias
+    dataset["rewards"] = dataset["rewards"] * reward_scale + reward_bias
 
 
 def extend_and_repeat(tensor: torch.Tensor, dim: int, repeat: int) -> torch.Tensor:
@@ -351,7 +359,8 @@ class TanhGaussianPolicy(nn.Module):
         base_network_output = self.base_network(observations)
         mean, log_std = torch.split(base_network_output, self.action_dim, dim=-1)
         log_std = self.log_std_multiplier() * log_std + self.log_std_offset()
-        return self.tanh_gaussian.log_prob(mean, log_std, actions)
+        _, log_probs = self.tanh_gaussian(mean, log_std, False)
+        return log_probs
 
     def forward(
         self,
@@ -381,23 +390,28 @@ class FullyConnectedQFunction(nn.Module):
         observation_dim: int,
         action_dim: int,
         orthogonal_init: bool = False,
+        n_hidden_layers: int = 3,
     ):
         super().__init__()
         self.observation_dim = observation_dim
         self.action_dim = action_dim
         self.orthogonal_init = orthogonal_init
 
-        self.network = nn.Sequential(
+        layers = [
             nn.Linear(observation_dim + action_dim, 256),
             nn.ReLU(),
-            nn.Linear(256, 256),
-            nn.ReLU(),
-            nn.Linear(256, 256),
-            nn.ReLU(),
-            nn.Linear(256, 1),
-        )
+        ]
+        for _ in range(n_hidden_layers - 1):
+            layers.append(nn.Linear(256, 256))
+            layers.append(nn.ReLU())
+        layers.append(nn.Linear(256, 1))
 
-        init_module_weights(self.network)
+        self.network = nn.Sequential(*layers)
+
+        if orthogonal_init:
+            self.network.apply(lambda m: init_module_weights(m, True))
+        else:
+            init_module_weights(self.network[-1], False)
 
     def forward(self, observations: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
         multiple_actions = False
@@ -573,7 +587,7 @@ class ContinuousCQL:
             target_q_values = target_q_values - alpha * next_log_pi
 
         target_q_values = target_q_values.unsqueeze(-1)
-        td_target = rewards + (1.0 - dones) * self.discount * target_q_values
+        td_target = rewards + (1.0 - dones) * self.discount * target_q_values.detach()
         td_target = td_target.squeeze(-1)
         qf1_loss = F.mse_loss(q1_predicted, td_target.detach())
         qf2_loss = F.mse_loss(q2_predicted, td_target.detach())
@@ -827,7 +841,10 @@ def train(config: TrainConfig):
 
     if config.normalize_reward:
         modify_reward(
-            dataset, config.env, bias=config.reward_bias, scale=config.reward_bias
+            dataset,
+            config.env,
+            reward_scale=config.reward_scale,
+            reward_bias=config.reward_bias,
         )
 
     if config.normalize:
@@ -862,9 +879,12 @@ def train(config: TrainConfig):
     seed = config.seed
     set_seed(seed, env)
 
-    critic_1 = FullyConnectedQFunction(state_dim, action_dim, config.orthogonal_init).to(
-        config.device
-    )
+    critic_1 = FullyConnectedQFunction(
+        state_dim,
+        action_dim,
+        config.orthogonal_init,
+        config.q_n_hidden_layers,
+    ).to(config.device)
     critic_2 = FullyConnectedQFunction(state_dim, action_dim, config.orthogonal_init).to(
         config.device
     )
