@@ -557,13 +557,14 @@ class ContinuousCQL:
         return policy_loss
 
     def _q_loss(
-            self, observations: torch.Tensor,
-            actions: torch.Tensor,
-            next_observations: torch.Tensor,
-            rewards: torch.Tensor,
-            dones: torch.Tensor,
-            alpha: torch.Tensor,
-            log_dict: Dict,
+        self,
+        observations: torch.Tensor,
+        actions: torch.Tensor,
+        next_observations: torch.Tensor,
+        rewards: torch.Tensor,
+        dones: torch.Tensor,
+        alpha: torch.Tensor,
+        log_dict: Dict,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         q1_predicted = self.critic_1(observations, actions)
         q2_predicted = self.critic_2(observations, actions)
