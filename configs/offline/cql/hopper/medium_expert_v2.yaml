@@ -31,4 +31,7 @@ qf_lr: 0.0003
 seed: 0
 soft_target_update_rate: 0.005
 target_update_period: 1
+q_n_hidden_layers: 3
+reward_scale: 1.0
+reward_bias: 0.0
 use_automatic_entropy_tuning: true
