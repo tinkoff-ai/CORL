@@ -7,12 +7,12 @@ checkpoints_path: null
 cql_clip_diff_max: .inf
 cql_clip_diff_min: -200
 cql_importance_sample: true
-cql_lagrange: false
+cql_lagrange: true
 cql_max_target_backup: true
 cql_alpha: 1.0
 cql_alpha_online: 1.0
 cql_n_actions: 10
-cql_target_action_gap: 0.8
+cql_target_action_gap: 5.0
 cql_temp: 1.0
 device: cuda
 discount: 0.99
