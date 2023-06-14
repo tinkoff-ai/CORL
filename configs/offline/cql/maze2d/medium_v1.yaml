@@ -9,7 +9,7 @@ cql_clip_diff_min: -.inf
 cql_importance_sample: true
 cql_lagrange: true
 cql_max_target_backup: false
-cql_min_q_weight: 10.0
+cql_alpha: 10.0
 cql_n_actions: 10
 cql_target_action_gap: 5.0
 cql_temp: 1.0
@@ -32,4 +32,9 @@ seed: 0
 soft_target_update_rate: 0.005
 target_update_period: 1
 q_n_hidden_layers: 3
+<<<<<<< HEAD
+=======
+reward_scale: 1.0
+reward_bias: 0.0
+>>>>>>> main
 use_automatic_entropy_tuning: true

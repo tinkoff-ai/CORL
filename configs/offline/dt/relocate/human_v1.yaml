@@ -1,0 +1,32 @@
+attention_dropout: 0.1
+batch_size: 4096
+betas:
+- 0.9
+- 0.999
+checkpoints_path: null
+clip_grad: 0.25
+deterministic_torch: false
+device: cuda
+embedding_dim: 128
+embedding_dropout: 0.1
+env_name: "relocate-human-v1"
+episode_len: 1000
+eval_episodes: 100
+eval_every: 5000
+eval_seed: 42
+group: "dt-relocate-human-multiseed-v0"
+learning_rate: 0.0008
+max_action: 1.0
+name: "DT"
+num_heads: 1
+num_layers: 3
+num_workers: 4
+project: "CORL"
+residual_dropout: 0.1
+reward_scale: 1.0
+seq_len: 20
+target_returns: [4300, 2150]
+train_seed: 10
+update_steps: 100000
+warmup_steps: 10000
+weight_decay: 0.0001
