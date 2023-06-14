@@ -165,7 +165,7 @@ You can check the links above for learning curves and details. Here, we report r
 |                    |            |        |        |     |     |      |       |      |    |
 | **adroit average** | 58.92|54.58|20.51|69.42|13.65|62.62|27.49|33.88|52.60|
 
-### Onffline-to-online
+### Onffline-to-Online
 #### Scores
 | **Task-Name**             |AWAC|CQL|IQL|SPOT|Cal-QL|
 |---------------------------|------------|--------|--------|-----|-----|
