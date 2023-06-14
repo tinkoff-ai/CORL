@@ -78,14 +78,18 @@ def pytorch_init(fan_in: float) -> Callable:
     bound = math.sqrt(1 / fan_in)
 
     def _init(key: jax.random.PRNGKey, shape: Tuple, dtype: type) -> jax.Array:
-        return jax.random.uniform(key, shape=shape, minval=-bound, maxval=bound, dtype=dtype)
+        return jax.random.uniform(
+            key, shape=shape, minval=-bound, maxval=bound, dtype=dtype
+        )
 
     return _init
 
 
 def uniform_init(bound: float) -> Callable:
     def _init(key: jax.random.PRNGKey, shape: Tuple, dtype: type) -> jax.Array:
-        return jax.random.uniform(key, shape=shape, minval=-bound, maxval=bound, dtype=dtype)
+        return jax.random.uniform(
+            key, shape=shape, minval=-bound, maxval=bound, dtype=dtype
+        )
 
     return _init
 
@@ -189,20 +193,22 @@ class EnsembleCritic(nn.Module):
             split_rngs={"params": True},
             axis_size=self.num_critics,
         )
-        q_values = ensemble(self.hidden_dim, self.layernorm, self.n_hiddens)(state, action)
+        q_values = ensemble(self.hidden_dim, self.layernorm, self.n_hiddens)(
+            state, action
+        )
         return q_values
 
 
 def qlearning_dataset(
-        env: gym.Env,
-        dataset: Dict = None,
-        terminate_on_end: bool = False,
-        **kwargs,
+    env: gym.Env,
+    dataset: Dict = None,
+    terminate_on_end: bool = False,
+    **kwargs,
 ) -> Dict:
     if dataset is None:
         dataset = env.get_dataset(**kwargs)
 
-    N = dataset['rewards'].shape[0]
+    N = dataset["rewards"].shape[0]
     obs_ = []
     next_obs_ = []
     action_ = []
@@ -212,21 +218,21 @@ def qlearning_dataset(
 
     # The newer version of the dataset adds an explicit
     # timeouts field. Keep old method for backwards compatability.
-    use_timeouts = 'timeouts' in dataset
+    use_timeouts = "timeouts" in dataset
 
     episode_step = 0
     for i in range(N - 1):
-        obs = dataset['observations'][i].astype(np.float32)
-        new_obs = dataset['observations'][i + 1].astype(np.float32)
-        action = dataset['actions'][i].astype(np.float32)
-        new_action = dataset['actions'][i + 1].astype(np.float32)
-        reward = dataset['rewards'][i].astype(np.float32)
-        done_bool = bool(dataset['terminals'][i])
+        obs = dataset["observations"][i].astype(np.float32)
+        new_obs = dataset["observations"][i + 1].astype(np.float32)
+        action = dataset["actions"][i].astype(np.float32)
+        new_action = dataset["actions"][i + 1].astype(np.float32)
+        reward = dataset["rewards"][i].astype(np.float32)
+        done_bool = bool(dataset["terminals"][i])
 
         if use_timeouts:
-            final_timestep = dataset['timeouts'][i]
+            final_timestep = dataset["timeouts"][i]
         else:
-            final_timestep = (episode_step == env._max_episode_steps - 1)
+            final_timestep = episode_step == env._max_episode_steps - 1
         if (not terminate_on_end) and final_timestep:
             # Skip this transition and don't apply terminals on the last step of an episode
             episode_step = 0
@@ -243,12 +249,12 @@ def qlearning_dataset(
         episode_step += 1
 
     return {
-        'observations': np.array(obs_),
-        'actions': np.array(action_),
-        'next_observations': np.array(next_obs_),
-        'next_actions': np.array(next_action_),
-        'rewards': np.array(reward_),
-        'terminals': np.array(done_),
+        "observations": np.array(obs_),
+        "actions": np.array(action_),
+        "next_observations": np.array(next_obs_),
+        "next_actions": np.array(next_action_),
+        "rewards": np.array(reward_),
+        "terminals": np.array(done_),
     }
 
 
@@ -269,30 +275,32 @@ class ReplayBuffer:
     std: float = 1
 
     def create_from_d4rl(
-            self,
-            dataset_name: str,
-            normalize_reward: bool = False,
-            is_normalize: bool = False,
+        self,
+        dataset_name: str,
+        normalize_reward: bool = False,
+        is_normalize: bool = False,
     ):
         d4rl_data = qlearning_dataset(gym.make(dataset_name))
         buffer = {
             "states": jnp.asarray(d4rl_data["observations"], dtype=jnp.float32),
             "actions": jnp.asarray(d4rl_data["actions"], dtype=jnp.float32),
             "rewards": jnp.asarray(d4rl_data["rewards"], dtype=jnp.float32),
-            "next_states": jnp.asarray(d4rl_data["next_observations"], dtype=jnp.float32),
+            "next_states": jnp.asarray(
+                d4rl_data["next_observations"], dtype=jnp.float32
+            ),
             "next_actions": jnp.asarray(d4rl_data["next_actions"], dtype=jnp.float32),
-            "dones": jnp.asarray(d4rl_data["terminals"], dtype=jnp.float32)
+            "dones": jnp.asarray(d4rl_data["terminals"], dtype=jnp.float32),
         }
         if is_normalize:
             self.mean, self.std = compute_mean_std(buffer["states"], eps=1e-3)
-            buffer["states"] = normalize_states(
-                buffer["states"], self.mean, self.std
-            )
+            buffer["states"] = normalize_states(buffer["states"], self.mean, self.std)
             buffer["next_states"] = normalize_states(
                 buffer["next_states"], self.mean, self.std
             )
         if normalize_reward:
-            buffer["rewards"] = ReplayBuffer.normalize_reward(dataset_name, buffer["rewards"])
+            buffer["rewards"] = ReplayBuffer.normalize_reward(
+                dataset_name, buffer["rewards"]
+            )
         self.data = buffer
 
     @property
@@ -300,8 +308,12 @@ class ReplayBuffer:
         # WARN: do not use __len__ here! It will use len of the dataclass, i.e. number of fields.
         return self.data["states"].shape[0]
 
-    def sample_batch(self, key: jax.random.PRNGKey, batch_size: int) -> Dict[str, jax.Array]:
-        indices = jax.random.randint(key, shape=(batch_size,), minval=0, maxval=self.size)
+    def sample_batch(
+            self, key: jax.random.PRNGKey, batch_size: int
+    ) -> Dict[str, jax.Array]:
+        indices = jax.random.randint(
+            key, shape=(batch_size,), minval=0, maxval=self.size
+        )
         batch = jax.tree_map(lambda arr: arr[indices], self.data)
         return batch
 
@@ -343,10 +355,10 @@ class Metrics:
 
 
 def normalize(
-        arr: jax.Array,
-        mean: jax.Array,
-        std: jax.Array,
-        eps: float = 1e-8
+    arr: jax.Array,
+    mean: jax.Array,
+    std: jax.Array,
+    eps: float = 1e-8
 ) -> jax.Array:
     return (arr - mean) / (std + eps)
 
@@ -360,10 +372,10 @@ def make_env(env_name: str, seed: int) -> gym.Env:
 
 
 def wrap_env(
-        env: gym.Env,
-        state_mean: Union[np.ndarray, float] = 0.0,
-        state_std: Union[np.ndarray, float] = 1.0,
-        reward_scale: float = 1.0,
+    env: gym.Env,
+    state_mean: Union[np.ndarray, float] = 0.0,
+    state_std: Union[np.ndarray, float] = 1.0,
+    reward_scale: float = 1.0,
 ) -> gym.Env:
     # PEP 8: E731 do not assign a lambda expression, use a def
     def normalize_state(state: np.ndarray) -> np.ndarray:
@@ -382,11 +394,11 @@ def wrap_env(
 
 
 def evaluate(
-        env: gym.Env,
-        params: jax.Array,
-        action_fn: Callable,
-        num_episodes: int,
-        seed: int,
+    env: gym.Env,
+    params: jax.Array,
+    action_fn: Callable,
+    num_episodes: int,
+    seed: int,
 ) -> np.ndarray:
     env.seed(seed)
     env.action_space.seed(seed)
@@ -414,14 +426,14 @@ class ActorTrainState(TrainState):
 
 
 def update_actor(
-        key: jax.random.PRNGKey,
-        actor: TrainState,
-        critic: TrainState,
-        batch: Dict[str, jax.Array],
-        beta: float,
-        tau: float,
-        normalize_q: bool,
-        metrics: Metrics,
+    key: jax.random.PRNGKey,
+    actor: TrainState,
+    critic: TrainState,
+    batch: Dict[str, jax.Array],
+    beta: float,
+    tau: float,
+    normalize_q: bool,
+    metrics: Metrics,
 ) -> Tuple[jax.random.PRNGKey, TrainState, TrainState, Metrics]:
     key, random_action_key = jax.random.split(key, 2)
 
@@ -440,12 +452,14 @@ def update_actor(
         random_actions = jax.random.uniform(
             random_action_key, shape=batch["actions"].shape, minval=-1.0, maxval=1.0
         )
-        new_metrics = metrics.update({
-            "actor_loss": loss,
-            "bc_mse_policy": bc_penalty.mean(),
-            "bc_mse_random": ((random_actions - batch["actions"]) ** 2).sum(-1).mean(),
-            "action_mse": ((actions - batch["actions"]) ** 2).mean()
-        })
+        new_metrics = metrics.update(
+            {
+                "actor_loss": loss,
+                "bc_mse_policy": bc_penalty.mean(),
+                "bc_mse_random": ((random_actions - batch["actions"]) ** 2).sum(-1).mean(),
+                "action_mse": ((actions - batch["actions"]) ** 2).mean(),
+            }
+        )
         return loss, new_metrics
 
     grads, new_metrics = jax.grad(actor_loss_fn, has_aux=True)(actor.params)
@@ -462,16 +476,16 @@ def update_actor(
 
 
 def update_critic(
-        key: jax.random.PRNGKey,
-        actor: TrainState,
-        critic: CriticTrainState,
-        batch: Dict[str, jax.Array],
-        gamma: float,
-        beta: float,
-        tau: float,  # noqa
-        policy_noise: float,
-        noise_clip: float,
-        metrics: Metrics,
+    key: jax.random.PRNGKey,
+    actor: TrainState,
+    critic: CriticTrainState,
+    batch: Dict[str, jax.Array],
+    gamma: float,
+    beta: float,
+    tau: float,  # noqa
+    policy_noise: float,
+    noise_clip: float,
+    metrics: Metrics,
 ) -> Tuple[jax.random.PRNGKey, TrainState, Metrics]:
     key, actions_key = jax.random.split(key)
 
@@ -483,7 +497,9 @@ def update_critic(
     )
     next_actions = jax.numpy.clip(next_actions + noise, -1, 1)
     bc_penalty = ((next_actions - batch["next_actions"]) ** 2).sum(-1)
-    next_q = critic.apply_fn(critic.target_params, batch["next_states"], next_actions).min(0)
+    next_q = critic.apply_fn(
+        critic.target_params, batch["next_states"], next_actions
+    ).min(0)
     next_q = next_q - beta * bc_penalty
 
     target_q = batch["rewards"] + (1 - batch["dones"]) * gamma * next_q
@@ -495,28 +511,32 @@ def update_critic(
         loss = ((q - target_q[None, ...]) ** 2).mean(1).sum(0)
         return loss, q_min
 
-    (loss, q_min), grads = jax.value_and_grad(critic_loss_fn, has_aux=True)(critic.params)
+    (loss, q_min), grads = jax.value_and_grad(critic_loss_fn, has_aux=True)(
+        critic.params
+    )
     new_critic = critic.apply_gradients(grads=grads)
-    new_metrics = metrics.update({
-        "critic_loss": loss,
-        "q_min": q_min,
-    })
+    new_metrics = metrics.update(
+        {
+            "critic_loss": loss,
+            "q_min": q_min,
+        }
+    )
     return key, new_critic, new_metrics
 
 
 def update_td3(
-        key: jax.random.PRNGKey,
-        actor: TrainState,
-        critic: CriticTrainState,
-        batch: Dict[str, Any],
-        metrics: Metrics,
-        gamma: float,
-        actor_bc_coef: float,
-        critic_bc_coef: float,
-        tau: float,
-        policy_noise: float,
-        noise_clip: float,
-        normalize_q: bool,
+    key: jax.random.PRNGKey,
+    actor: TrainState,
+    critic: CriticTrainState,
+    batch: Dict[str, Any],
+    metrics: Metrics,
+    gamma: float,
+    actor_bc_coef: float,
+    critic_bc_coef: float,
+    tau: float,
+    policy_noise: float,
+    noise_clip: float,
+    normalize_q: bool,
 ) -> Tuple[jax.random.PRNGKey, TrainState, TrainState, Metrics]:
     key, new_critic, new_metrics = update_critic(
         key,
@@ -531,30 +551,23 @@ def update_td3(
         metrics,
     )
     key, new_actor, new_critic, new_metrics = update_actor(
-        key,
-        actor,
-        new_critic,
-        batch,
-        actor_bc_coef,
-        tau,
-        normalize_q,
-        new_metrics
+        key, actor, new_critic, batch, actor_bc_coef, tau, normalize_q, new_metrics
     )
     return key, new_actor, new_critic, new_metrics
 
 
 def update_td3_no_targets(
-        key: jax.random.PRNGKey,
-        actor: TrainState,
-        critic: CriticTrainState,
-        batch: Dict[str, Any],
-        gamma: float,
-        metrics: Metrics,
-        actor_bc_coef: float,  # noqa
-        critic_bc_coef: float,
-        tau: float,
-        policy_noise: float,
-        noise_clip: float,
+    key: jax.random.PRNGKey,
+    actor: TrainState,
+    critic: CriticTrainState,
+    batch: Dict[str, Any],
+    gamma: float,
+    metrics: Metrics,
+    actor_bc_coef: float,  # noqa
+    critic_bc_coef: float,
+    tau: float,
+    policy_noise: float,
+    noise_clip: float,
 ) -> Tuple[jax.random.PRNGKey, TrainState, TrainState, Metrics]:
     key, new_critic, new_metrics = update_critic(
         key,
@@ -633,7 +646,8 @@ def main(config: Config):
     )
 
     update_td3_partial = partial(
-        update_td3, gamma=config.gamma,
+        update_td3,
+        gamma=config.gamma,
         actor_bc_coef=config.actor_bc_coef,
         critic_bc_coef=config.critic_bc_coef,
         tau=config.tau,
@@ -643,7 +657,8 @@ def main(config: Config):
     )
 
     update_td3_no_targets_partial = partial(
-        update_td3_no_targets, gamma=config.gamma,
+        update_td3_no_targets,
+        gamma=config.gamma,
         actor_bc_coef=config.actor_bc_coef,
         critic_bc_coef=config.critic_bc_coef,
         tau=config.tau,
@@ -655,33 +670,40 @@ def main(config: Config):
         key, batch_key = jax.random.split(carry["key"])
         batch = carry["buffer"].sample_batch(batch_key, batch_size=config.batch_size)
 
-        full_update = partial(update_td3_partial,
-                              key=key,
-                              actor=carry["actor"],
-                              critic=carry["critic"],
-                              batch=batch,
-                              metrics=carry["metrics"])
+        full_update = partial(
+            update_td3_partial,
+            key=key,
+            actor=carry["actor"],
+            critic=carry["critic"],
+            batch=batch,
+            metrics=carry["metrics"],
+        )
 
-        update = partial(update_td3_no_targets_partial,
-                         key=key,
-                         actor=carry["actor"],
-                         critic=carry["critic"],
-                         batch=batch,
-                         metrics=carry["metrics"])
+        update = partial(
+            update_td3_no_targets_partial,
+            key=key,
+            actor=carry["actor"],
+            critic=carry["critic"],
+            batch=batch,
+            metrics=carry["metrics"],
+        )
 
         key, new_actor, new_critic, new_metrics = jax.lax.cond(
             update_carry["delayed_updates"][i], full_update, update
         )
 
-        carry.update(
-            key=key, actor=new_actor, critic=new_critic, metrics=new_metrics
-        )
+        carry.update(key=key, actor=new_actor, critic=new_critic, metrics=new_metrics)
         return carry
 
     # metrics
     bc_metrics_to_log = [
-        "critic_loss", "q_min", "actor_loss", "batch_entropy",
-        "bc_mse_policy", "bc_mse_random", "action_mse"
+        "critic_loss",
+        "q_min",
+        "actor_loss",
+        "batch_entropy",
+        "bc_mse_policy",
+        "bc_mse_random",
+        "action_mse",
     ]
     # shared carry for update loops
     update_carry = {
@@ -691,7 +713,7 @@ def main(config: Config):
         "buffer": buffer,
         "delayed_updates": jax.numpy.equal(
             jax.numpy.arange(config.num_updates_on_epoch) % config.policy_freq, 0
-        ).astype(int)
+        ).astype(int),
     }
 
     @jax.jit
@@ -707,11 +729,13 @@ def main(config: Config):
             lower=0,
             upper=config.num_updates_on_epoch,
             body_fun=td3_loop_update_step,
-            init_val=update_carry
+            init_val=update_carry,
         )
         # log mean over epoch for each metric
         mean_metrics = update_carry["metrics"].compute()
-        wandb.log({"epoch": epoch, **{f"ReBRAC/{k}": v for k, v in mean_metrics.items()}})
+        wandb.log(
+            {"epoch": epoch, **{f"ReBRAC/{k}": v for k, v in mean_metrics.items()}}
+        )
 
         if epoch % config.eval_every == 0 or epoch == config.num_epochs - 1:
             eval_returns = evaluate(
@@ -722,13 +746,15 @@ def main(config: Config):
                 seed=config.eval_seed,
             )
             normalized_score = eval_env.get_normalized_score(eval_returns) * 100.0
-            wandb.log({
-                "epoch": epoch,
-                "eval/return_mean": np.mean(eval_returns),
-                "eval/return_std": np.std(eval_returns),
-                "eval/normalized_score_mean": np.mean(normalized_score),
-                "eval/normalized_score_std": np.std(normalized_score)
-            })
+            wandb.log(
+                {
+                    "epoch": epoch,
+                    "eval/return_mean": np.mean(eval_returns),
+                    "eval/return_std": np.std(eval_returns),
+                    "eval/normalized_score_mean": np.mean(normalized_score),
+                    "eval/normalized_score_std": np.std(normalized_score),
+                }
+            )
 
 
 if __name__ == "__main__":
