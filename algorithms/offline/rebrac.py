@@ -5,33 +5,26 @@ import os
 
 os.environ["TF_CUDNN_DETERMINISTIC"] = "1"  # For reproducibility
 
-import wandb
-import uuid
-import pyrallis
-
-import d4rl  # noqa
-import optax
+from typing import Any, Callable, Dict, Sequence, Tuple, Union
+from copy import deepcopy
+from dataclasses import asdict, dataclass
 from functools import partial
-from dataclasses import dataclass, asdict
-from flax.core import FrozenDict
-from typing import Any
-
-from flax.training.train_state import TrainState
+import math
+import uuid
 
 import chex
-
+import d4rl  # noqa
+from flax.core import FrozenDict
+import flax.linen as nn
+from flax.training.train_state import TrainState
 import gym
-
-import math
 import jax
 import jax.numpy as jnp
-import flax.linen as nn
 import numpy as np
-
-from copy import deepcopy
+import optax
+import pyrallis
 from tqdm.auto import trange
-from typing import Sequence, Dict, Callable, Tuple, Union
-
+import wandb
 
 default_kernel_init = nn.initializers.lecun_normal()
 default_bias_init = nn.initializers.zeros
