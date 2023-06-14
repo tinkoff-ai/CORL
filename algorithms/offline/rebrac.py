@@ -309,7 +309,7 @@ class ReplayBuffer:
         return self.data["states"].shape[0]
 
     def sample_batch(
-            self, key: jax.random.PRNGKey, batch_size: int
+        self, key: jax.random.PRNGKey, batch_size: int
     ) -> Dict[str, jax.Array]:
         indices = jax.random.randint(
             key, shape=(batch_size,), minval=0, maxval=self.size
@@ -355,10 +355,7 @@ class Metrics:
 
 
 def normalize(
-    arr: jax.Array,
-    mean: jax.Array,
-    std: jax.Array,
-    eps: float = 1e-8
+    arr: jax.Array, mean: jax.Array, std: jax.Array, eps: float = 1e-8
 ) -> jax.Array:
     return (arr - mean) / (std + eps)
 
@@ -380,7 +377,7 @@ def wrap_env(
     # PEP 8: E731 do not assign a lambda expression, use a def
     def normalize_state(state: np.ndarray) -> np.ndarray:
         return (
-                state - state_mean
+            state - state_mean
         ) / state_std  # epsilon should be already added in std.
 
     def scale_reward(reward: float) -> float:
@@ -456,7 +453,9 @@ def update_actor(
             {
                 "actor_loss": loss,
                 "bc_mse_policy": bc_penalty.mean(),
-                "bc_mse_random": ((random_actions - batch["actions"]) ** 2).sum(-1).mean(),
+                "bc_mse_random": ((random_actions - batch["actions"]) ** 2)
+                .sum(-1)
+                .mean(),
                 "action_mse": ((actions - batch["actions"]) ** 2).mean(),
             }
         )
