@@ -9,6 +9,7 @@ gym[mujoco_py,classic_control]==0.23.0
 torch==1.11.0+cu113
 sortedcontainers==2.4.0
 pyrallis==0.3.1
+--find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 jax[cuda11_cudnn82]
 flax==0.6.1
 optax==0.1.3
