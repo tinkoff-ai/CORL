@@ -11,6 +11,10 @@
 * 📈 Benchmarked Implementation for N algorithms
 * 🖼 [Weights and Biases](https://wandb.ai/site) integration
 
+----
+* ⭐ If you're interested in __discrete control__, make sure to check out our new library — [Katakomba](https://github.com/tinkoff-ai/katakomba). It provides both discrete control algorithms augmented with recurrence and an offline RL benchmark for the NetHack Learning environment.
+----
+
 
 ## Getting started
 
@@ -28,10 +32,11 @@ docker run --gpus=all -it --rm --name <container_name> <image_name>
 
 | Algorithm                                                                                                                      | Variants Implemented                                                                                     | Wandb Report |
 |--------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------| ----------- |
-| **Offline and Offline-to-online**                                                                                              ||
+| **Offline and Offline-to-Online**                                                                                              ||
 | ✅ [Conservative Q-Learning for Offline Reinforcement Learning <br>(CQL)](https://arxiv.org/abs/2006.04779)                     | [`offline/cql.py`](algorithms/offline/cql.py) <br /> [`finetune/cql.py`](algorithms/finetune/cql.py)     | [`Offline`](https://wandb.ai/tlab/CORL/reports/-Offline-CQL--VmlldzoyNzA2MTk5) <br /> <br /> [`Offline-to-online`](https://wandb.ai/tlab/CORL/reports/-Offline-to-Online-CQL--Vmlldzo0NTQ3NTMz)
 | ✅ [Accelerating Online Reinforcement Learning with Offline Datasets <br>(AWAC)](https://arxiv.org/abs/2006.09359)              | [`offline/awac.py`](algorithms/offline/awac.py) <br /> [`finetune/awac.py`](algorithms/finetune/awac.py) | [`Offline`](https://wandb.ai/tlab/CORL/reports/-Offline-AWAC--VmlldzoyNzA2MjE3) <br /> <br /> [`Offline-to-online`](https://wandb.ai/tlab/CORL/reports/-Offline-to-Online-AWAC--VmlldzozODAyNzQz)
 | ✅ [Offline Reinforcement Learning with Implicit Q-Learning <br>(IQL)](https://arxiv.org/abs/2110.06169)                        | [`offline/iql.py`](algorithms/offline/iql.py)  <br /> [`finetune/iql.py`](algorithms/finetune/iql.py)    | [`Offline`](https://wandb.ai/tlab/CORL/reports/-Offline-IQL--VmlldzoyNzA2MTkx) <br /> <br /> [`Offline-to-online`](https://wandb.ai/tlab/CORL/reports/-Offline-to-Online-IQL--VmlldzozNzE1MTEy)
+| **Offline-to-Online only**                                                                                              ||
 | ✅ [Supported Policy Optimization for Offline Reinforcement Learning <br>(SPOT)](https://arxiv.org/abs/2202.06239)              | [`finetune/spot.py`](algorithms/finetune/spot.py)                                                        | [`Offline-to-online`](https://wandb.ai/tlab/CORL/reports/-Offline-to-Online-SPOT--VmlldzozODk5MTgx)
 | ✅ [Cal-QL: Calibrated Offline RL Pre-Training for Efficient Online Fine-Tuning <br>(Cal-QL)](https://arxiv.org/abs/2303.05479) | [`finetune/cal_ql.py`](algorithms/finetune/cal_ql.py)                                                             | [`Offline-to-online`](https://wandb.ai/tlab/CORL/reports/-Offline-to-Online-Cal-QL--Vmlldzo0NTQ3NDk5)
 | **Offline only**                                                                                                               ||
@@ -128,7 +133,7 @@ You can check the links above for learning curves and details. Here, we report r
 |maze2d-medium-v1|19.16 ± 1.24|27.64 ± 1.87|150.93 ± 3.89|131.50 ± 25.38|128.66 ± 5.44|122.69 ± 30.00|93.80 ± 14.66|154.41 ± 1.58|68.14 ± 12.25|
 |maze2d-large-v1|20.75 ± 6.66|41.83 ± 3.64|197.64 ± 5.26|227.93 ± 1.90|157.51 ± 7.32|162.25 ± 44.18|207.51 ± 0.96|182.52 ± 2.68|50.25 ± 19.34|
 |                              |            |        |        |     |     |      |       |      |    |
-| **maze2d average**           | 30.65|149.30|165.35|126.07|111.95|151.48|162.27|60.74|
+| **maze2d average**           | 18.67|30.65|149.30|165.35|126.07|111.95|151.48|162.27|60.74|
 
 ##### Antmaze
 | **Task-Name**|BC|10% BC|TD3+BC|AWAC|CQL|IQL|SAC-N|EDAC|DT|
@@ -160,7 +165,7 @@ You can check the links above for learning curves and details. Here, we report r
 |                    |            |        |        |     |     |      |       |      |    |
 | **adroit average** | 58.92|54.58|20.51|69.42|13.65|62.62|27.49|33.88|52.60|
 
-### Onffline-to-online
+### Onffline-to-Online
 #### Scores
 | **Task-Name**             |AWAC|CQL|IQL|SPOT|Cal-QL|
 |---------------------------|------------|--------|--------|-----|-----|
