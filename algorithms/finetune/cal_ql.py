@@ -66,6 +66,7 @@ class TrainConfig:
     reward_bias: float = 0.0  # Reward bias for normalization
     # Cal-QL
     mixing_ratio: float = 0.5  # Data mixing ratio for online tuning
+    is_sparse_reward: bool = False  # Use sparse reward
     # Wandb logging
     project: str = "CORL"
     group: str = "Cal-QL-D4RL"
@@ -271,34 +272,34 @@ def return_reward_range(dataset: Dict, max_episode_steps: int) -> Tuple[float, f
     return min(returns), max(returns)
 
 
-def get_return_to_go(dataset: Dict, gamma: float, max_episode_steps: int) -> List[float]:
+def get_return_to_go(dataset: Dict, env: gym.Env, config: TrainConfig) -> np.ndarray:
     returns = []
     ep_ret, ep_len = 0.0, 0
     cur_rewards = []
     terminals = []
-    for r, d in zip(dataset["rewards"], dataset["terminals"]):
+    N = len(dataset["rewards"])
+    for t, (r, d) in enumerate(zip(dataset["rewards"], dataset["terminals"])):
         ep_ret += float(r)
         cur_rewards.append(float(r))
         terminals.append(float(d))
         ep_len += 1
-        if d or ep_len == max_episode_steps:
+        is_last_step = (t == N -1) or (np.linalg.norm(dataset['observations'][t + 1] - dataset['next_observations'][t]) > 1e-6) or ep_len == env._max_episode_steps
+
+        if d or is_last_step:
             discounted_returns = [0] * ep_len
             prev_return = 0
-            for i in reversed(range(ep_len)):
-                discounted_returns[i] = cur_rewards[i] + gamma * prev_return * (
-                    1 - terminals[i]
-                )
-                prev_return = discounted_returns[i]
+            if config.is_sparse_reward and r == env.ref_min_score * config.reward_scale + config.reward_bias:
+                discounted_returns = [r / (1 - config.discount)] * ep_len
+            else:
+                for i in reversed(range(ep_len)):
+                    discounted_returns[i] = cur_rewards[i] + config.discount * prev_return * (
+                        1 - terminals[i]
+                    )
+                    prev_return = discounted_returns[i]
             returns += discounted_returns
             ep_ret, ep_len = 0.0, 0
             cur_rewards = []
             terminals = []
-    discounted_returns = [0] * ep_len
-    prev_return = 0
-    for i in reversed(range(ep_len)):
-        discounted_returns[i] = cur_rewards[i] + gamma * prev_return * (1 - terminals[i])
-        prev_return = discounted_returns[i]
-    returns += discounted_returns
     return returns
 
 
@@ -984,7 +985,7 @@ def train(config: TrainConfig):
             reward_scale=config.reward_scale,
             reward_bias=config.reward_bias,
         )
-    mc_returns = get_return_to_go(dataset, config.discount, max_episode_steps=1000)
+    mc_returns = get_return_to_go(dataset, env, config)
     dataset["mc_returns"] = np.array(mc_returns)
     assert len(dataset["mc_returns"]) == len(dataset["rewards"])
 
