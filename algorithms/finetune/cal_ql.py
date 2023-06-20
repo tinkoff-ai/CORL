@@ -285,13 +285,13 @@ def get_return_to_go(dataset: Dict, env: gym.Env, config: TrainConfig) -> np.nda
         ep_len += 1
         is_last_step = (
             (t == N - 1)
-            or (
+            or (  # noqa
                 np.linalg.norm(
                     dataset["observations"][t + 1] - dataset["next_observations"][t]
                 )
-                > 1e-6
+                > 1e-6  # noqa
             )
-            or ep_len == env._max_episode_steps
+            or ep_len == env._max_episode_steps  # noqa
         )
 
         if d or is_last_step:
@@ -299,7 +299,7 @@ def get_return_to_go(dataset: Dict, env: gym.Env, config: TrainConfig) -> np.nda
             prev_return = 0
             if (
                 config.is_sparse_reward
-                and r == env.ref_min_score * config.reward_scale + config.reward_bias
+                and r == env.ref_min_score * config.reward_scale + config.reward_bias  #noqa
             ):
                 discounted_returns = [r / (1 - config.discount)] * ep_len
             else:
