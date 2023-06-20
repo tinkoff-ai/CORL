@@ -75,23 +75,15 @@ class TrainConfig:
     def __post_init__(self):
         self.name = f"{self.name}-{self.env}-{str(uuid.uuid4())[:8]}"
         if self.checkpoints_path is not None:
-            self.checkpoints_path = os.path.join(
-                self.checkpoints_path, self.name
-            )
+            self.checkpoints_path = os.path.join(self.checkpoints_path, self.name)
 
 
 def soft_update(target: nn.Module, source: nn.Module, tau: float):
-    for target_param, source_param in zip(
-        target.parameters(), source.parameters()
-    ):
-        target_param.data.copy_(
-            (1 - tau) * target_param.data + tau * source_param.data
-        )
+    for target_param, source_param in zip(target.parameters(), source.parameters()):
+        target_param.data.copy_((1 - tau) * target_param.data + tau * source_param.data)
 
 
-def compute_mean_std(
-    states: np.ndarray, eps: float
-) -> Tuple[np.ndarray, np.ndarray]:
+def compute_mean_std(states: np.ndarray, eps: float) -> Tuple[np.ndarray, np.ndarray]:
     mean = states.mean(0)
     std = states.std(0) + eps
     return mean, std
@@ -141,15 +133,11 @@ class ReplayBuffer:
         self._actions = torch.zeros(
             (buffer_size, action_dim), dtype=torch.float32, device=device
         )
-        self._rewards = torch.zeros(
-            (buffer_size, 1), dtype=torch.float32, device=device
-        )
+        self._rewards = torch.zeros((buffer_size, 1), dtype=torch.float32, device=device)
         self._next_states = torch.zeros(
             (buffer_size, state_dim), dtype=torch.float32, device=device
         )
-        self._dones = torch.zeros(
-            (buffer_size, 1), dtype=torch.float32, device=device
-        )
+        self._dones = torch.zeros((buffer_size, 1), dtype=torch.float32, device=device)
         self._mc_returns = torch.zeros(
             (buffer_size, 1), dtype=torch.float32, device=device
         )
@@ -162,9 +150,7 @@ class ReplayBuffer:
     # Loads data in d4rl format, i.e. from Dict[str, np.array].
     def load_d4rl_dataset(self, data: Dict[str, np.ndarray]):
         if self._size != 0:
-            raise ValueError(
-                "Trying to load data into non-empty replay buffer"
-            )
+            raise ValueError("Trying to load data into non-empty replay buffer")
         n_transitions = data["observations"].shape[0]
         if n_transitions > self._buffer_size:
             raise ValueError(
@@ -172,18 +158,10 @@ class ReplayBuffer:
             )
         self._states[:n_transitions] = self._to_tensor(data["observations"])
         self._actions[:n_transitions] = self._to_tensor(data["actions"])
-        self._rewards[:n_transitions] = self._to_tensor(
-            data["rewards"][..., None]
-        )
-        self._next_states[:n_transitions] = self._to_tensor(
-            data["next_observations"]
-        )
-        self._dones[:n_transitions] = self._to_tensor(
-            data["terminals"][..., None]
-        )
-        self._mc_returns[:n_transitions] = self._to_tensor(
-            data["mc_returns"][..., None]
-        )
+        self._rewards[:n_transitions] = self._to_tensor(data["rewards"][..., None])
+        self._next_states[:n_transitions] = self._to_tensor(data["next_observations"])
+        self._dones[:n_transitions] = self._to_tensor(data["terminals"][..., None])
+        self._mc_returns[:n_transitions] = self._to_tensor(data["mc_returns"][..., None])
         self._size += n_transitions
         self._pointer = min(self._size, n_transitions)
 
@@ -279,9 +257,7 @@ def eval_actor(
     return np.asarray(episode_rewards), np.mean(successes)
 
 
-def return_reward_range(
-    dataset: Dict, max_episode_steps: int
-) -> Tuple[float, float]:
+def return_reward_range(dataset: Dict, max_episode_steps: int) -> Tuple[float, float]:
     returns, lengths = [], []
     ep_ret, ep_len = 0.0, 0
     for r, d in zip(dataset["rewards"], dataset["terminals"]):
@@ -296,9 +272,7 @@ def return_reward_range(
     return min(returns), max(returns)
 
 
-def get_return_to_go(
-    dataset: Dict, env: gym.Env, config: TrainConfig
-) -> np.ndarray:
+def get_return_to_go(dataset: Dict, env: gym.Env, config: TrainConfig) -> np.ndarray:
     returns = []
     ep_ret, ep_len = 0.0, 0
     cur_rewards = []
@@ -313,8 +287,7 @@ def get_return_to_go(
             (t == N - 1)
             or (
                 np.linalg.norm(
-                    dataset["observations"][t + 1]
-                    - dataset["next_observations"][t]
+                    dataset["observations"][t + 1] - dataset["next_observations"][t]
                 )
                 > 1e-6
             )
@@ -326,8 +299,7 @@ def get_return_to_go(
             prev_return = 0
             if (
                 config.is_sparse_reward
-                and r
-                == env.ref_min_score * config.reward_scale + config.reward_bias
+                and r == env.ref_min_score * config.reward_scale + config.reward_bias
             ):
                 discounted_returns = [r / (1 - config.discount)] * ep_len
             else:
@@ -378,15 +350,11 @@ def modify_reward_online(
     return reward
 
 
-def extend_and_repeat(
-    tensor: torch.Tensor, dim: int, repeat: int
-) -> torch.Tensor:
+def extend_and_repeat(tensor: torch.Tensor, dim: int, repeat: int) -> torch.Tensor:
     return tensor.unsqueeze(dim).repeat_interleave(repeat, dim=dim)
 
 
-def init_module_weights(
-    module: torch.nn.Module, orthogonal_init: bool = False
-):
+def init_module_weights(module: torch.nn.Module, orthogonal_init: bool = False):
     if isinstance(module, nn.Linear):
         if orthogonal_init:
             nn.init.orthogonal_(module.weight, gain=np.sqrt(2))
@@ -441,9 +409,7 @@ class ReparameterizedTanhGaussian(nn.Module):
         else:
             action_sample = action_distribution.rsample()
 
-        log_prob = torch.sum(
-            action_distribution.log_prob(action_sample), dim=-1
-        )
+        log_prob = torch.sum(action_distribution.log_prob(action_sample), dim=-1)
 
         return action_sample, log_prob
 
@@ -491,9 +457,7 @@ class TanhGaussianPolicy(nn.Module):
         if actions.ndim == 3:
             observations = extend_and_repeat(observations, 1, actions.shape[1])
         base_network_output = self.base_network(observations)
-        mean, log_std = torch.split(
-            base_network_output, self.action_dim, dim=-1
-        )
+        mean, log_std = torch.split(base_network_output, self.action_dim, dim=-1)
         log_std = self.log_std_multiplier() * log_std + self.log_std_offset()
         _, log_probs = self.tanh_gaussian(mean, log_std, False)
         return log_probs
@@ -507,18 +471,14 @@ class TanhGaussianPolicy(nn.Module):
         if repeat is not None:
             observations = extend_and_repeat(observations, 1, repeat)
         base_network_output = self.base_network(observations)
-        mean, log_std = torch.split(
-            base_network_output, self.action_dim, dim=-1
-        )
+        mean, log_std = torch.split(base_network_output, self.action_dim, dim=-1)
         log_std = self.log_std_multiplier() * log_std + self.log_std_offset()
         actions, log_probs = self.tanh_gaussian(mean, log_std, deterministic)
         return self.max_action * actions, log_probs
 
     @torch.no_grad()
     def act(self, state: np.ndarray, device: str = "cpu"):
-        state = torch.tensor(
-            state.reshape(1, -1), device=device, dtype=torch.float32
-        )
+        state = torch.tensor(state.reshape(1, -1), device=device, dtype=torch.float32)
         with torch.no_grad():
             actions, _ = self(state, not self.training)
         return actions.cpu().data.numpy().flatten()
@@ -552,16 +512,14 @@ class FullyConnectedQFunction(nn.Module):
         else:
             init_module_weights(self.network[-1], False)
 
-    def forward(
-        self, observations: torch.Tensor, actions: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, observations: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
         multiple_actions = False
         batch_size = observations.shape[0]
         if actions.ndim == 3 and observations.ndim == 2:
             multiple_actions = True
-            observations = extend_and_repeat(
-                observations, 1, actions.shape[1]
-            ).reshape(-1, observations.shape[-1])
+            observations = extend_and_repeat(observations, 1, actions.shape[1]).reshape(
+                -1, observations.shape[-1]
+            )
             actions = actions.reshape(-1, actions.shape[-1])
         input_tensor = torch.cat([observations, actions], dim=-1)
         q_values = torch.squeeze(self.network(input_tensor), dim=-1)
@@ -573,9 +531,7 @@ class FullyConnectedQFunction(nn.Module):
 class Scalar(nn.Module):
     def __init__(self, init_value: float):
         super().__init__()
-        self.constant = nn.Parameter(
-            torch.tensor(init_value, dtype=torch.float32)
-        )
+        self.constant = nn.Parameter(torch.tensor(init_value, dtype=torch.float32))
 
     def forward(self) -> nn.Parameter:
         return self.constant
@@ -667,19 +623,13 @@ class CalQL:
         self.total_it = 0
 
     def update_target_network(self, soft_target_update_rate: float):
-        soft_update(
-            self.target_critic_1, self.critic_1, soft_target_update_rate
-        )
-        soft_update(
-            self.target_critic_2, self.critic_2, soft_target_update_rate
-        )
+        soft_update(self.target_critic_1, self.critic_1, soft_target_update_rate)
+        soft_update(self.target_critic_2, self.critic_2, soft_target_update_rate)
 
     def switch_calibration(self):
         self._calibration_enabled = not self._calibration_enabled
 
-    def _alpha_and_alpha_loss(
-        self, observations: torch.Tensor, log_pi: torch.Tensor
-    ):
+    def _alpha_and_alpha_loss(self, observations: torch.Tensor, log_pi: torch.Tensor):
         if self.use_automatic_entropy_tuning:
             alpha_loss = -(
                 self.log_alpha() * (log_pi + self.target_entropy).detach()
@@ -748,9 +698,7 @@ class CalQL:
             target_q_values = target_q_values - alpha * next_log_pi
 
         target_q_values = target_q_values.unsqueeze(-1)
-        td_target = (
-            rewards + (1.0 - dones) * self.discount * target_q_values.detach()
-        )
+        td_target = rewards + (1.0 - dones) * self.discount * target_q_values.detach()
         td_target = td_target.squeeze(-1)
         qf1_loss = F.mse_loss(q1_predicted, td_target.detach())
         qf2_loss = F.mse_loss(q2_predicted, td_target.detach())
@@ -778,12 +726,8 @@ class CalQL:
 
         cql_q1_rand = self.critic_1(observations, cql_random_actions)
         cql_q2_rand = self.critic_2(observations, cql_random_actions)
-        cql_q1_current_actions = self.critic_1(
-            observations, cql_current_actions
-        )
-        cql_q2_current_actions = self.critic_2(
-            observations, cql_current_actions
-        )
+        cql_q1_current_actions = self.critic_1(observations, cql_current_actions)
+        cql_q2_current_actions = self.critic_2(observations, cql_current_actions)
         cql_q1_next_actions = self.critic_1(observations, cql_next_actions)
         cql_q2_next_actions = self.critic_2(observations, cql_next_actions)
 
@@ -808,18 +752,10 @@ class CalQL:
 
         """ Cal-QL: bound Q-values with MC return-to-go """
         if self._calibration_enabled:
-            cql_q1_current_actions = torch.maximum(
-                cql_q1_current_actions, lower_bounds
-            )
-            cql_q2_current_actions = torch.maximum(
-                cql_q2_current_actions, lower_bounds
-            )
-            cql_q1_next_actions = torch.maximum(
-                cql_q1_next_actions, lower_bounds
-            )
-            cql_q2_next_actions = torch.maximum(
-                cql_q2_next_actions, lower_bounds
-            )
+            cql_q1_current_actions = torch.maximum(cql_q1_current_actions, lower_bounds)
+            cql_q2_current_actions = torch.maximum(cql_q2_current_actions, lower_bounds)
+            cql_q1_next_actions = torch.maximum(cql_q1_next_actions, lower_bounds)
+            cql_q2_next_actions = torch.maximum(cql_q2_next_actions, lower_bounds)
 
         cql_cat_q1 = torch.cat(
             [
@@ -861,12 +797,8 @@ class CalQL:
                 dim=1,
             )
 
-        cql_qf1_ood = (
-            torch.logsumexp(cql_cat_q1 / self.cql_temp, dim=1) * self.cql_temp
-        )
-        cql_qf2_ood = (
-            torch.logsumexp(cql_cat_q2 / self.cql_temp, dim=1) * self.cql_temp
-        )
+        cql_qf1_ood = torch.logsumexp(cql_cat_q1 / self.cql_temp, dim=1) * self.cql_temp
+        cql_qf2_ood = torch.logsumexp(cql_cat_q2 / self.cql_temp, dim=1) * self.cql_temp
 
         """Subtract the log likelihood of data"""
         cql_qf1_diff = torch.clamp(
@@ -1024,12 +956,8 @@ class CalQL:
         self.critic_1.load_state_dict(state_dict=state_dict["critic1"])
         self.critic_2.load_state_dict(state_dict=state_dict["critic2"])
 
-        self.target_critic_1.load_state_dict(
-            state_dict=state_dict["critic1_target"]
-        )
-        self.target_critic_2.load_state_dict(
-            state_dict=state_dict["critic2_target"]
-        )
+        self.target_critic_1.load_state_dict(state_dict=state_dict["critic1_target"])
+        self.target_critic_2.load_state_dict(state_dict=state_dict["critic2_target"])
 
         self.critic_1_optimizer.load_state_dict(
             state_dict=state_dict["critic_1_optimizer"]
@@ -1037,9 +965,7 @@ class CalQL:
         self.critic_2_optimizer.load_state_dict(
             state_dict=state_dict["critic_2_optimizer"]
         )
-        self.actor_optimizer.load_state_dict(
-            state_dict=state_dict["actor_optim"]
-        )
+        self.actor_optimizer.load_state_dict(state_dict=state_dict["actor_optim"])
 
         self.log_alpha = state_dict["sac_log_alpha"]
         self.alpha_optimizer.load_state_dict(
@@ -1082,9 +1008,7 @@ def train(config: TrainConfig):
     assert len(dataset["mc_returns"]) == len(dataset["rewards"])
 
     if config.normalize:
-        state_mean, state_std = compute_mean_std(
-            dataset["observations"], eps=1e-3
-        )
+        state_mean, state_std = compute_mean_std(dataset["observations"], eps=1e-3)
     else:
         state_mean, state_std = 0, 1
 
@@ -1115,9 +1039,7 @@ def train(config: TrainConfig):
     if config.checkpoints_path is not None:
         print(f"Checkpoints path: {config.checkpoints_path}")
         os.makedirs(config.checkpoints_path, exist_ok=True)
-        with open(
-            os.path.join(config.checkpoints_path, "config.yaml"), "w"
-        ) as f:
+        with open(os.path.join(config.checkpoints_path, "config.yaml"), "w") as f:
             pyrallis.dump(config, f)
 
     # Set seeds
@@ -1137,12 +1059,8 @@ def train(config: TrainConfig):
         config.orthogonal_init,
         config.q_n_hidden_layers,
     ).to(config.device)
-    critic_1_optimizer = torch.optim.Adam(
-        list(critic_1.parameters()), config.qf_lr
-    )
-    critic_2_optimizer = torch.optim.Adam(
-        list(critic_2.parameters()), config.qf_lr
-    )
+    critic_1_optimizer = torch.optim.Adam(list(critic_1.parameters()), config.qf_lr)
+    critic_2_optimizer = torch.optim.Adam(list(critic_2.parameters()), config.qf_lr)
 
     actor = TanhGaussianPolicy(
         state_dim,
@@ -1206,9 +1124,7 @@ def train(config: TrainConfig):
     train_successes = []
 
     print("Offline pretraining")
-    for t in range(
-        int(config.offline_iterations) + int(config.online_iterations)
-    ):
+    for t in range(int(config.offline_iterations) + int(config.online_iterations)):
         if t == config.offline_iterations:
             print("Online tuning")
             trainer.switch_calibration()
@@ -1229,9 +1145,7 @@ def train(config: TrainConfig):
             if not goal_achieved:
                 goal_achieved = is_goal_reached(reward, env_infos)
             episode_return += reward
-            real_done = (
-                False  # Episode can timeout which is different from done
-            )
+            real_done = False  # Episode can timeout which is different from done
             if done and episode_step < max_steps:
                 real_done = True
 
@@ -1243,9 +1157,7 @@ def train(config: TrainConfig):
                     reward_bias=config.reward_bias,
                     **reward_mod_dict,
                 )
-            online_buffer.add_transition(
-                state, action, reward, next_state, real_done
-            )
+            online_buffer.add_transition(state, action, reward, next_state, real_done)
             state = next_state
 
             if done:
@@ -1253,14 +1165,10 @@ def train(config: TrainConfig):
                 # Valid only for envs with goal, e.g. AntMaze, Adroit
                 if is_env_with_goal:
                     train_successes.append(goal_achieved)
-                    online_log["train/regret"] = np.mean(
-                        1 - np.array(train_successes)
-                    )
+                    online_log["train/regret"] = np.mean(1 - np.array(train_successes))
                     online_log["train/is_success"] = float(goal_achieved)
                 online_log["train/episode_return"] = episode_return
-                normalized_return = eval_env.get_normalized_score(
-                    episode_return
-                )
+                normalized_return = eval_env.get_normalized_score(episode_return)
                 online_log["train/d4rl_normalized_episode_return"] = (
                     normalized_return * 100.0
                 )
@@ -1281,12 +1189,8 @@ def train(config: TrainConfig):
             ]
 
         log_dict = trainer.train(batch)
-        log_dict[
-            "offline_iter" if t < config.offline_iterations else "online_iter"
-        ] = (
-            t
-            if t < config.offline_iterations
-            else t - config.offline_iterations
+        log_dict["offline_iter" if t < config.offline_iterations else "online_iter"] = (
+            t if t < config.offline_iterations else t - config.offline_iterations
         )
         log_dict.update(online_log)
         wandb.log(log_dict, step=trainer.total_it)
@@ -1306,9 +1210,7 @@ def train(config: TrainConfig):
             # Valid only for envs with goal, e.g. AntMaze, Adroit
             if t >= config.offline_iterations and is_env_with_goal:
                 eval_successes.append(success_rate)
-                eval_log["eval/regret"] = np.mean(
-                    1 - np.array(train_successes)
-                )
+                eval_log["eval/regret"] = np.mean(1 - np.array(train_successes))
                 eval_log["eval/success_rate"] = success_rate
             normalized_eval_score = normalized * 100.0
             eval_log["eval/d4rl_normalized_score"] = normalized_eval_score
@@ -1322,9 +1224,7 @@ def train(config: TrainConfig):
             if config.checkpoints_path:
                 torch.save(
                     trainer.state_dict(),
-                    os.path.join(
-                        config.checkpoints_path, f"checkpoint_{t}.pt"
-                    ),
+                    os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"),
                 )
             wandb.log(eval_log, step=trainer.total_it)
 
