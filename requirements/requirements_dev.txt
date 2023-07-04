@@ -12,3 +12,6 @@ pyrallis==0.3.1
 pre-commit==2.20.0
 catalyst-codestyle==21.9.2
 pytest==7.1.2
+# experimental, thus without a specific version for now
+git+https://github.com/Farama-Foundation/Minari.git
+gymnasium==0.28.1

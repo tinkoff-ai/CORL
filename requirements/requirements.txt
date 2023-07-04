@@ -9,3 +9,6 @@ gym[mujoco_py,classic_control]==0.23.0
 torch==1.11.0+cu113
 sortedcontainers==2.4.0
 pyrallis==0.3.1
+# experimental, thus without a specific version for now
+git+https://github.com/Farama-Foundation/Minari.git
+gymnasium==0.28.1

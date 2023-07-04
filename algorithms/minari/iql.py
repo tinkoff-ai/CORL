@@ -1,15 +1,19 @@
 # source: https://github.com/gwthomas/IQL-PyTorch
 # https://arxiv.org/pdf/2110.06169.pdf
+
+# Implementation TODOs:
+# 1. iql_deterministic is true only for 2 datasets. Can we achieve same scores without it and remote it?
+# 2. MLP class introduced bugs in the past. We should remove it and use simple nn.Sequential.
+# 3. Refactor IQL updating code to be more consistent in style
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import copy
 from dataclasses import asdict, dataclass
 import os
-from pathlib import Path
 import random
 import uuid
 
-import d4rl
-import gym
+import minari
+import gymnasium as gym
 import numpy as np
 import pyrallis
 import torch
@@ -21,6 +25,7 @@ import wandb
 
 TensorBatch = List[torch.Tensor]
 
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 EXP_ADV_MAX = 100.0
 LOG_STD_MIN = -20.0
 LOG_STD_MAX = 2.0
@@ -28,38 +33,47 @@ LOG_STD_MAX = 2.0
 
 @dataclass
 class TrainConfig:
-    # Experiment
-    device: str = "cuda"
-    env: str = "halfcheetah-medium-expert-v2"  # OpenAI gym environment name
-    seed: int = 0  # Sets Gym, PyTorch and Numpy seeds
-    eval_freq: int = int(5e3)  # How often (time steps) we evaluate
-    n_episodes: int = 10  # How many episodes run during evaluation
-    max_timesteps: int = int(1e6)  # Max time steps to run environment
-    checkpoints_path: Optional[str] = None  # Save path
-    load_model: str = ""  # Model load file name, "" doesn't load
-    # IQL
-    buffer_size: int = 2_000_000  # Replay buffer size
-    batch_size: int = 256  # Batch size for all networks
-    discount: float = 0.99  # Discount factor
-    tau: float = 0.005  # Target network update rate
-    beta: float = 3.0  # Inverse temperature. Small beta -> BC, big beta -> maximizing Q
-    iql_tau: float = 0.7  # Coefficient for asymmetric loss
-    iql_deterministic: bool = False  # Use deterministic actor
-    normalize: bool = True  # Normalize states
-    normalize_reward: bool = False  # Normalize reward
-    vf_lr: float = 3e-4  # V function learning rate
-    qf_lr: float = 3e-4  # Critic learning rate
-    actor_lr: float = 3e-4  # Actor learning rate
-    actor_dropout: Optional[float] = None  # Adroit uses dropout for policy network
-    # Wandb logging
+    # wandb params
     project: str = "CORL"
-    group: str = "IQL-D4RL"
-    name: str = "IQL"
+    group: str = "IQL-Minari"
+    name: str = "iql"
+    # model params
+    gamma: float = 0.99                     # Discount factor
+    tau: float = 0.005                      # Target network update rate
+    beta: float = 3.0                       # Inverse temperature. Small beta -> BC, big beta -> maximizing Q
+    iql_tau: float = 0.7                    # Coefficient for asymmetric loss
+    iql_deterministic: bool = False         # Use deterministic actor
+    vf_lr: float = 3e-4                     # V function learning rate
+    qf_lr: float = 3e-4                     # Critic learning rate
+    actor_lr: float = 3e-4                  # Actor learning rate
+    actor_dropout: Optional[float] = None   # Adroit uses dropout for policy network
+    # training params
+    dataset_id: str = "pen-human-v0"        # Minari remote dataset name
+    update_steps: int = int(1e6)            # Total training networks updates
+    buffer_size: int = 2_000_000            # Replay buffer size
+    batch_size: int = 256                   # Batch size for all networks
+    normalize_state: bool = True            # Normalize states
+    normalize_reward: bool = False          # Normalize reward
+    # evaluation params
+    eval_every: int = int(5e3)              # How often (time steps) we evaluate
+    eval_episodes: int = 10                 # How many episodes run during evaluation
+    # general params
+    train_seed: int = 0
+    eval_seed: int = 0
+    checkpoints_path: Optional[str] = None  # Save path
 
     def __post_init__(self):
-        self.name = f"{self.name}-{self.env}-{str(uuid.uuid4())[:8]}"
+        self.name = f"{self.name}-{self.dataset_id}-{str(uuid.uuid4())[:8]}"
         if self.checkpoints_path is not None:
             self.checkpoints_path = os.path.join(self.checkpoints_path, self.name)
+
+
+def set_seed(seed: int, deterministic_torch: bool = False):
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.manual_seed(seed)
+    torch.use_deterministic_algorithms(deterministic_torch)
 
 
 def soft_update(target: nn.Module, source: nn.Module, tau: float):
@@ -85,9 +99,8 @@ def wrap_env(
 ) -> gym.Env:
     # PEP 8: E731 do not assign a lambda expression, use a def
     def normalize_state(state):
-        return (
-            state - state_mean
-        ) / state_std  # epsilon should be already added in std.
+        # epsilon should be already added in std.
+        return (state - state_mean) / state_std
 
     def scale_reward(reward):
         # Please be careful, here reward is multiplied by scale!
@@ -97,6 +110,51 @@ def wrap_env(
     if reward_scale != 1.0:
         env = gym.wrappers.TransformReward(env, scale_reward)
     return env
+
+
+# This is how reward normalization among all datasets is done in original IQL
+def return_reward_range(dataset, max_episode_steps):
+    returns, lengths = [], []
+    ep_ret, ep_len = 0.0, 0
+    for r, d in zip(dataset["rewards"], dataset["terminals"]):
+        ep_ret += float(r)
+        ep_len += 1
+        if d or ep_len == max_episode_steps:
+            returns.append(ep_ret)
+            lengths.append(ep_len)
+            ep_ret, ep_len = 0.0, 0
+    lengths.append(ep_len)  # but still keep track of number of steps
+    assert sum(lengths) == len(dataset["rewards"])
+    return min(returns), max(returns)
+
+
+def modify_reward(dataset, env_name, max_episode_steps=1000):
+    if any(s in env_name for s in ("halfcheetah", "hopper", "walker2d")):
+        min_ret, max_ret = return_reward_range(dataset, max_episode_steps)
+        dataset["rewards"] /= max_ret - min_ret
+        dataset["rewards"] *= max_episode_steps
+    elif "antmaze" in env_name:
+        dataset["rewards"] -= 1.0
+
+
+# WARN: this will load full dataset in memory (which is OK for D4RL datasets)
+def qlearning_dataset(dataset: minari.MinariDataset) -> Dict[str, np.ndarray]:
+    obs, next_obs, actions, rewards, dones = [], [], [], [], []
+
+    for episode in dataset:
+        obs.append(episode.observations[:-1].astype(np.float32))
+        next_obs.append(episode.observations[1:].astype(np.float32))
+        actions.append(episode.actions.astype(np.float32))
+        rewards.append(episode.rewards)
+        dones.append(episode.terminations)
+
+    return {
+        "observations": np.concatenate(obs),
+        "actions": np.concatenate(actions),
+        "next_observations": np.concatenate(next_obs),
+        "rewards": np.concatenate(rewards),
+        "terminals": np.concatenate(dones)
+    }
 
 
 class ReplayBuffer:
@@ -127,10 +185,11 @@ class ReplayBuffer:
     def _to_tensor(self, data: np.ndarray) -> torch.Tensor:
         return torch.tensor(data, dtype=torch.float32, device=self._device)
 
-    # Loads data in d4rl format, i.e. from Dict[str, np.array].
-    def load_d4rl_dataset(self, data: Dict[str, np.ndarray]):
+    # Loads data in d4rl format, i.e. from Dict[str, np.array] after q_learning_dataset.
+    def load_dataset(self, data: Dict[str, np.ndarray]):
         if self._size != 0:
             raise ValueError("Trying to load data into non-empty replay buffer")
+
         n_transitions = data["observations"].shape[0]
         if n_transitions > self._buffer_size:
             raise ValueError(
@@ -141,9 +200,8 @@ class ReplayBuffer:
         self._rewards[:n_transitions] = self._to_tensor(data["rewards"][..., None])
         self._next_states[:n_transitions] = self._to_tensor(data["next_observations"])
         self._dones[:n_transitions] = self._to_tensor(data["terminals"][..., None])
-        self._size += n_transitions
-        self._pointer = min(self._size, n_transitions)
 
+        self._size = self._pointer = n_transitions
         print(f"Dataset size: {n_transitions}")
 
     def sample(self, batch_size: int) -> TensorBatch:
@@ -159,74 +217,6 @@ class ReplayBuffer:
         # Use this method to add new data into the replay buffer during fine-tuning.
         # I left it unimplemented since now we do not do fine-tuning.
         raise NotImplementedError
-
-
-def set_seed(
-    seed: int, env: Optional[gym.Env] = None, deterministic_torch: bool = False
-):
-    if env is not None:
-        env.seed(seed)
-        env.action_space.seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-    torch.manual_seed(seed)
-    torch.use_deterministic_algorithms(deterministic_torch)
-
-
-def wandb_init(config: dict) -> None:
-    wandb.init(
-        config=config,
-        project=config["project"],
-        group=config["group"],
-        name=config["name"],
-        id=str(uuid.uuid4()),
-    )
-    wandb.run.save()
-
-
-@torch.no_grad()
-def eval_actor(
-    env: gym.Env, actor: nn.Module, device: str, n_episodes: int, seed: int
-) -> np.ndarray:
-    env.seed(seed)
-    actor.eval()
-    episode_rewards = []
-    for _ in range(n_episodes):
-        state, done = env.reset(), False
-        episode_reward = 0.0
-        while not done:
-            action = actor.act(state, device)
-            state, reward, done, _ = env.step(action)
-            episode_reward += reward
-        episode_rewards.append(episode_reward)
-
-    actor.train()
-    return np.asarray(episode_rewards)
-
-
-def return_reward_range(dataset, max_episode_steps):
-    returns, lengths = [], []
-    ep_ret, ep_len = 0.0, 0
-    for r, d in zip(dataset["rewards"], dataset["terminals"]):
-        ep_ret += float(r)
-        ep_len += 1
-        if d or ep_len == max_episode_steps:
-            returns.append(ep_ret)
-            lengths.append(ep_len)
-            ep_ret, ep_len = 0.0, 0
-    lengths.append(ep_len)  # but still keep track of number of steps
-    assert sum(lengths) == len(dataset["rewards"])
-    return min(returns), max(returns)
-
-
-def modify_reward(dataset, env_name, max_episode_steps=1000):
-    if any(s in env_name for s in ("halfcheetah", "hopper", "walker2d")):
-        min_ret, max_ret = return_reward_range(dataset, max_episode_steps)
-        dataset["rewards"] /= max_ret - min_ret
-        dataset["rewards"] *= max_episode_steps
-    elif "antmaze" in env_name:
-        dataset["rewards"] -= 1.0
 
 
 def asymmetric_l2_loss(u: torch.Tensor, tau: float) -> torch.Tensor:
@@ -376,14 +366,14 @@ class ImplicitQLearning:
         max_action: float,
         actor: nn.Module,
         actor_optimizer: torch.optim.Optimizer,
+        actor_lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
         q_network: nn.Module,
         q_optimizer: torch.optim.Optimizer,
         v_network: nn.Module,
         v_optimizer: torch.optim.Optimizer,
         iql_tau: float = 0.7,
         beta: float = 3.0,
-        max_steps: int = 1000000,
-        discount: float = 0.99,
+        gamma: float = 0.99,
         tau: float = 0.005,
         device: str = "cpu",
     ):
@@ -395,10 +385,10 @@ class ImplicitQLearning:
         self.v_optimizer = v_optimizer
         self.q_optimizer = q_optimizer
         self.actor_optimizer = actor_optimizer
-        self.actor_lr_schedule = CosineAnnealingLR(self.actor_optimizer, max_steps)
+        self.actor_lr_scheduler = actor_lr_scheduler
         self.iql_tau = iql_tau
         self.beta = beta
-        self.discount = discount
+        self.gamma = gamma
         self.tau = tau
 
         self.total_it = 0
@@ -427,7 +417,7 @@ class ImplicitQLearning:
         terminals: torch.Tensor,
         log_dict: Dict,
     ):
-        targets = rewards + (1.0 - terminals.float()) * self.discount * next_v.detach()
+        targets = rewards + (1.0 - terminals.float()) * self.gamma * next_v.detach()
         qs = self.qf.both(observations, actions)
         q_loss = sum(F.mse_loss(q, targets) for q in qs) / len(qs)
         log_dict["q_loss"] = q_loss.item()
@@ -460,7 +450,7 @@ class ImplicitQLearning:
         self.actor_optimizer.zero_grad()
         policy_loss.backward()
         self.actor_optimizer.step()
-        self.actor_lr_schedule.step()
+        self.actor_lr_scheduler.step()
 
     def train(self, batch: TensorBatch) -> Dict[str, float]:
         self.total_it += 1
@@ -494,7 +484,7 @@ class ImplicitQLearning:
             "v_optimizer": self.v_optimizer.state_dict(),
             "actor": self.actor.state_dict(),
             "actor_optimizer": self.actor_optimizer.state_dict(),
-            "actor_lr_schedule": self.actor_lr_schedule.state_dict(),
+            "actor_lr_scheduler": self.actor_lr_scheduler.state_dict(),
             "total_it": self.total_it,
         }
 
@@ -508,44 +498,69 @@ class ImplicitQLearning:
 
         self.actor.load_state_dict(state_dict["actor"])
         self.actor_optimizer.load_state_dict(state_dict["actor_optimizer"])
-        self.actor_lr_schedule.load_state_dict(state_dict["actor_lr_schedule"])
+        self.actor_lr_scheduler.load_state_dict(state_dict["actor_lr_scheduler"])
 
         self.total_it = state_dict["total_it"]
 
 
+@torch.no_grad()
+def evaluate(env: gym.Env, actor: nn.Module, num_episodes: int, seed: int, device: str) -> np.ndarray:
+    actor.eval()
+    episode_rewards = []
+    for i in range(num_episodes):
+        done = False
+        state, info = env.reset(seed=seed + i)
+
+        episode_reward = 0.0
+        while not done:
+            action = actor.act(state, device)
+            state, reward, terminated, truncated, info = env.step(action)
+            done = terminated or truncated
+            episode_reward += reward
+        episode_rewards.append(episode_reward)
+
+    actor.train()
+    return np.asarray(episode_rewards)
+
+
 @pyrallis.wrap()
 def train(config: TrainConfig):
-    env = gym.make(config.env)
+    wandb.init(
+        config=asdict(config),
+        project=config.project,
+        group=config.group,
+        name=config.name,
+        id=str(uuid.uuid4()),
+        save_code=True
+    )
+    minari.download_dataset(config.dataset_id)
+    dataset = minari.load_dataset(config.dataset_id)
 
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
+    eval_env = dataset.recover_environment()
+    state_dim = eval_env.observation_space.shape[0]
+    action_dim = eval_env.action_space.shape[0]
+    max_action = float(eval_env.action_space.high[0])
 
-    dataset = d4rl.qlearning_dataset(env)
-
+    dataset = qlearning_dataset(dataset)
     if config.normalize_reward:
-        modify_reward(dataset, config.env)
+        modify_reward(dataset, config.dataset_id)
 
-    if config.normalize:
+    if config.normalize_state:
         state_mean, state_std = compute_mean_std(dataset["observations"], eps=1e-3)
     else:
         state_mean, state_std = 0, 1
 
-    dataset["observations"] = normalize_states(
-        dataset["observations"], state_mean, state_std
-    )
-    dataset["next_observations"] = normalize_states(
-        dataset["next_observations"], state_mean, state_std
-    )
-    env = wrap_env(env, state_mean=state_mean, state_std=state_std)
+    dataset["observations"] = normalize_states(dataset["observations"], state_mean, state_std)
+    dataset["next_observations"] = normalize_states(dataset["next_observations"], state_mean, state_std)
+
+    eval_env = wrap_env(eval_env, state_mean=state_mean, state_std=state_std)
     replay_buffer = ReplayBuffer(
         state_dim,
         action_dim,
         config.buffer_size,
-        config.device,
+        DEVICE,
     )
-    replay_buffer.load_d4rl_dataset(dataset)
-
-    max_action = float(env.action_space.high[0])
+    replay_buffer.load_dataset(dataset)
 
     if config.checkpoints_path is not None:
         print(f"Checkpoints path: {config.checkpoints_path}")
@@ -554,88 +569,63 @@ def train(config: TrainConfig):
             pyrallis.dump(config, f)
 
     # Set seeds
-    seed = config.seed
-    set_seed(seed, env)
+    set_seed(config.train_seed)
 
-    q_network = TwinQ(state_dim, action_dim).to(config.device)
-    v_network = ValueFunction(state_dim).to(config.device)
-    actor = (
-        DeterministicPolicy(
-            state_dim, action_dim, max_action, dropout=config.actor_dropout
-        )
-        if config.iql_deterministic
-        else GaussianPolicy(
-            state_dim, action_dim, max_action, dropout=config.actor_dropout
-        )
-    ).to(config.device)
+    q_network = TwinQ(state_dim, action_dim).to(DEVICE)
+    v_network = ValueFunction(state_dim).to(DEVICE)
+    if config.iql_deterministic:
+        actor = DeterministicPolicy(state_dim, action_dim, max_action, dropout=config.actor_dropout).to(DEVICE)
+    else:
+        actor = GaussianPolicy(state_dim, action_dim, max_action, dropout=config.actor_dropout).to(DEVICE)
+
     v_optimizer = torch.optim.Adam(v_network.parameters(), lr=config.vf_lr)
     q_optimizer = torch.optim.Adam(q_network.parameters(), lr=config.qf_lr)
     actor_optimizer = torch.optim.Adam(actor.parameters(), lr=config.actor_lr)
+    actor_lr_scheduler = CosineAnnealingLR(actor_optimizer, config.update_steps)
 
-    kwargs = {
-        "max_action": max_action,
-        "actor": actor,
-        "actor_optimizer": actor_optimizer,
-        "q_network": q_network,
-        "q_optimizer": q_optimizer,
-        "v_network": v_network,
-        "v_optimizer": v_optimizer,
-        "discount": config.discount,
-        "tau": config.tau,
-        "device": config.device,
-        # IQL
-        "beta": config.beta,
-        "iql_tau": config.iql_tau,
-        "max_steps": config.max_timesteps,
-    }
+    trainer = ImplicitQLearning(
+        max_action=max_action,
+        actor=actor,
+        actor_optimizer=actor_optimizer,
+        actor_lr_scheduler=actor_lr_scheduler,
+        q_network=q_network,
+        q_optimizer=q_optimizer,
+        v_network=v_network,
+        v_optimizer=v_optimizer,
+        iql_tau=config.iql_tau,
+        beta=config.beta,
+        gamma=config.gamma,
+        tau=config.tau,
+        device=DEVICE
+    )
 
-    print("---------------------------------------")
-    print(f"Training IQL, Env: {config.env}, Seed: {seed}")
-    print("---------------------------------------")
-
-    # Initialize actor
-    trainer = ImplicitQLearning(**kwargs)
-
-    if config.load_model != "":
-        policy_file = Path(config.load_model)
-        trainer.load_state_dict(torch.load(policy_file))
-        actor = trainer.actor
-
-    wandb_init(asdict(config))
-
-    evaluations = []
-    for t in range(int(config.max_timesteps)):
-        batch = replay_buffer.sample(config.batch_size)
-        batch = [b.to(config.device) for b in batch]
+    for step in range(int(config.update_steps)):
+        batch = [b.to(DEVICE) for b in replay_buffer.sample(config.batch_size)]
         log_dict = trainer.train(batch)
+
         wandb.log(log_dict, step=trainer.total_it)
-        # Evaluate episode
-        if (t + 1) % config.eval_freq == 0:
-            print(f"Time steps: {t + 1}")
-            eval_scores = eval_actor(
-                env,
-                actor,
-                device=config.device,
-                n_episodes=config.n_episodes,
-                seed=config.seed,
+
+        if (step + 1) % config.eval_every == 0:
+            eval_scores = evaluate(
+                env=eval_env,
+                actor=actor,
+                num_episodes=config.eval_episodes,
+                seed=config.eval_seed,
+                device=DEVICE
             )
             eval_score = eval_scores.mean()
-            normalized_eval_score = env.get_normalized_score(eval_score) * 100.0
-            evaluations.append(normalized_eval_score)
-            print("---------------------------------------")
-            print(
-                f"Evaluation over {config.n_episodes} episodes: "
-                f"{eval_score:.3f} , D4RL score: {normalized_eval_score:.3f}"
+            # TODO: Minari does not support normalized scores for now. We will revisit this later.
+            # normalized_eval_score = env.get_normalized_score(eval_score) * 100.0
+            wandb.log(
+                # {"d4rl_normalized_score": normalized_eval_score}, step=trainer.total_it
+                {"evaluation_return": eval_score}, step=trainer.total_it
             )
-            print("---------------------------------------")
+
             if config.checkpoints_path is not None:
                 torch.save(
                     trainer.state_dict(),
-                    os.path.join(config.checkpoints_path, f"checkpoint_{t}.pt"),
+                    os.path.join(config.checkpoints_path, f"checkpoint_{step}.pt"),
                 )
-            wandb.log(
-                {"d4rl_normalized_score": normalized_eval_score}, step=trainer.total_it
-            )
 
 
 if __name__ == "__main__":
