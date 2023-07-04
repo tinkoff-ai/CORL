@@ -22,7 +22,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm.auto import trange
-
 import wandb
 
 TensorBatch = List[torch.Tensor]
