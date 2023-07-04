@@ -5,7 +5,6 @@ wandb_run.sh
 sweep_config.yaml
 .ml-job-preset.yml
 wandb
-algorithms/minari/testing.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
