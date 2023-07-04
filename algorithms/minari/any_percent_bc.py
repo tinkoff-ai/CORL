@@ -12,7 +12,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm.auto import trange
-
 import wandb
 
 TensorBatch = List[torch.Tensor]
