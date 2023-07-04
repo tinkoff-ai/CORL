@@ -392,8 +392,6 @@ class ImplicitQLearning:
         self.beta = beta
         self.gamma = gamma
         self.tau = tau
-
-        self.total_it = 0
         self.device = device
 
     def _update_v(self, observations, actions, log_dict) -> torch.Tensor:
@@ -455,7 +453,6 @@ class ImplicitQLearning:
         self.actor_lr_scheduler.step()
 
     def train(self, batch: TensorBatch) -> Dict[str, float]:
-        self.total_it += 1
         (
             observations,
             actions,
@@ -487,7 +484,6 @@ class ImplicitQLearning:
             "actor": self.actor.state_dict(),
             "actor_optimizer": self.actor_optimizer.state_dict(),
             "actor_lr_scheduler": self.actor_lr_scheduler.state_dict(),
-            "total_it": self.total_it,
         }
 
     def load_state_dict(self, state_dict: Dict[str, Any]):
@@ -501,8 +497,6 @@ class ImplicitQLearning:
         self.actor.load_state_dict(state_dict["actor"])
         self.actor_optimizer.load_state_dict(state_dict["actor_optimizer"])
         self.actor_lr_scheduler.load_state_dict(state_dict["actor_lr_scheduler"])
-
-        self.total_it = state_dict["total_it"]
 
 
 @torch.no_grad()
@@ -615,7 +609,7 @@ def train(config: TrainConfig):
         batch = [b.to(DEVICE) for b in replay_buffer.sample(config.batch_size)]
         log_dict = trainer.train(batch)
 
-        wandb.log(log_dict, step=trainer.total_it)
+        wandb.log(log_dict, step=step)
 
         if (step + 1) % config.eval_every == 0:
             eval_scores = evaluate(
@@ -631,7 +625,7 @@ def train(config: TrainConfig):
             wandb.log(
                 # {"d4rl_normalized_score": normalized_eval_score}, step=trainer.total_it
                 {"evaluation_return": eval_score},
-                step=trainer.total_it,
+                step=step,
             )
 
             if config.checkpoints_path is not None:
