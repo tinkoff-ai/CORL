@@ -2,8 +2,8 @@
 # https://arxiv.org/pdf/2110.06169.pdf
 
 # Implementation TODOs:
-# 1. iql_deterministic is true only for 2 datasets. Can we achieve same scores without it and remote it?
-# 2. MLP class introduced bugs in the past. We should remove it and use simple nn.Sequential.
+# 1. iql_deterministic is true only for 2 datasets. Can we remote it?
+# 2. MLP class introduced bugs in the past. We should remove it.
 # 3. Refactor IQL updating code to be more consistent in style
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import copy
@@ -12,8 +12,8 @@ import os
 import random
 import uuid
 
-import minari
 import gymnasium as gym
+import minari
 import numpy as np
 import pyrallis
 import torch
@@ -21,6 +21,8 @@ from torch.distributions import Normal
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import CosineAnnealingLR
+from tqdm.auto import trange
+
 import wandb
 
 TensorBatch = List[torch.Tensor]
@@ -38,25 +40,25 @@ class TrainConfig:
     group: str = "IQL-Minari"
     name: str = "iql"
     # model params
-    gamma: float = 0.99                     # Discount factor
-    tau: float = 0.005                      # Target network update rate
-    beta: float = 3.0                       # Inverse temperature. Small beta -> BC, big beta -> maximizing Q
-    iql_tau: float = 0.7                    # Coefficient for asymmetric loss
-    iql_deterministic: bool = False         # Use deterministic actor
-    vf_lr: float = 3e-4                     # V function learning rate
-    qf_lr: float = 3e-4                     # Critic learning rate
-    actor_lr: float = 3e-4                  # Actor learning rate
-    actor_dropout: Optional[float] = None   # Adroit uses dropout for policy network
+    gamma: float = 0.99  # Discount factor
+    tau: float = 0.005  # Target network update rate
+    beta: float = 3.0  # Inverse temperature. Small beta -> BC, big beta -> maximizing Q
+    iql_tau: float = 0.7  # Coefficient for asymmetric loss
+    iql_deterministic: bool = False  # Use deterministic actor
+    vf_lr: float = 3e-4  # V function learning rate
+    qf_lr: float = 3e-4  # Critic learning rate
+    actor_lr: float = 3e-4  # Actor learning rate
+    actor_dropout: Optional[float] = None  # Adroit uses dropout for policy network
     # training params
-    dataset_id: str = "pen-human-v0"        # Minari remote dataset name
-    update_steps: int = int(1e6)            # Total training networks updates
-    buffer_size: int = 2_000_000            # Replay buffer size
-    batch_size: int = 256                   # Batch size for all networks
-    normalize_state: bool = True            # Normalize states
-    normalize_reward: bool = False          # Normalize reward
+    dataset_id: str = "pen-human-v0"  # Minari remote dataset name
+    update_steps: int = int(1e6)  # Total training networks updates
+    buffer_size: int = 2_000_000  # Replay buffer size
+    batch_size: int = 256  # Batch size for all networks
+    normalize_state: bool = True  # Normalize states
+    normalize_reward: bool = False  # Normalize reward
     # evaluation params
-    eval_every: int = int(5e3)              # How often (time steps) we evaluate
-    eval_episodes: int = 10                 # How many episodes run during evaluation
+    eval_every: int = int(5e3)  # How often (time steps) we evaluate
+    eval_episodes: int = 10  # How many episodes run during evaluation
     # general params
     train_seed: int = 0
     eval_seed: int = 0
@@ -153,7 +155,7 @@ def qlearning_dataset(dataset: minari.MinariDataset) -> Dict[str, np.ndarray]:
         "actions": np.concatenate(actions),
         "next_observations": np.concatenate(next_obs),
         "rewards": np.concatenate(rewards),
-        "terminals": np.concatenate(dones)
+        "terminals": np.concatenate(dones),
     }
 
 
@@ -505,7 +507,9 @@ class ImplicitQLearning:
 
 
 @torch.no_grad()
-def evaluate(env: gym.Env, actor: nn.Module, num_episodes: int, seed: int, device: str) -> np.ndarray:
+def evaluate(
+    env: gym.Env, actor: nn.Module, num_episodes: int, seed: int, device: str
+) -> np.ndarray:
     actor.eval()
     episode_rewards = []
     for i in range(num_episodes):
@@ -532,7 +536,7 @@ def train(config: TrainConfig):
         group=config.group,
         name=config.name,
         id=str(uuid.uuid4()),
-        save_code=True
+        save_code=True,
     )
     minari.download_dataset(config.dataset_id)
     dataset = minari.load_dataset(config.dataset_id)
@@ -551,8 +555,12 @@ def train(config: TrainConfig):
     else:
         state_mean, state_std = 0, 1
 
-    dataset["observations"] = normalize_states(dataset["observations"], state_mean, state_std)
-    dataset["next_observations"] = normalize_states(dataset["next_observations"], state_mean, state_std)
+    dataset["observations"] = normalize_states(
+        dataset["observations"], state_mean, state_std
+    )
+    dataset["next_observations"] = normalize_states(
+        dataset["next_observations"], state_mean, state_std
+    )
 
     eval_env = wrap_env(eval_env, state_mean=state_mean, state_std=state_std)
     replay_buffer = ReplayBuffer(
@@ -575,9 +583,13 @@ def train(config: TrainConfig):
     q_network = TwinQ(state_dim, action_dim).to(DEVICE)
     v_network = ValueFunction(state_dim).to(DEVICE)
     if config.iql_deterministic:
-        actor = DeterministicPolicy(state_dim, action_dim, max_action, dropout=config.actor_dropout).to(DEVICE)
+        actor = DeterministicPolicy(
+            state_dim, action_dim, max_action, dropout=config.actor_dropout
+        ).to(DEVICE)
     else:
-        actor = GaussianPolicy(state_dim, action_dim, max_action, dropout=config.actor_dropout).to(DEVICE)
+        actor = GaussianPolicy(
+            state_dim, action_dim, max_action, dropout=config.actor_dropout
+        ).to(DEVICE)
 
     v_optimizer = torch.optim.Adam(v_network.parameters(), lr=config.vf_lr)
     q_optimizer = torch.optim.Adam(q_network.parameters(), lr=config.qf_lr)
@@ -597,10 +609,10 @@ def train(config: TrainConfig):
         beta=config.beta,
         gamma=config.gamma,
         tau=config.tau,
-        device=DEVICE
+        device=DEVICE,
     )
 
-    for step in range(int(config.update_steps)):
+    for step in trange(config.update_steps):
         batch = [b.to(DEVICE) for b in replay_buffer.sample(config.batch_size)]
         log_dict = trainer.train(batch)
 
@@ -612,14 +624,15 @@ def train(config: TrainConfig):
                 actor=actor,
                 num_episodes=config.eval_episodes,
                 seed=config.eval_seed,
-                device=DEVICE
+                device=DEVICE,
             )
             eval_score = eval_scores.mean()
-            # TODO: Minari does not support normalized scores for now. We will revisit this later.
+            # TODO: Minari does not have normalized scores. We will revisit this later.
             # normalized_eval_score = env.get_normalized_score(eval_score) * 100.0
             wandb.log(
                 # {"d4rl_normalized_score": normalized_eval_score}, step=trainer.total_it
-                {"evaluation_return": eval_score}, step=trainer.total_it
+                {"evaluation_return": eval_score},
+                step=trainer.total_it,
             )
 
             if config.checkpoints_path is not None:

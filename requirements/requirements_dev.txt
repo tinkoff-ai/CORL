@@ -1,6 +1,6 @@
 # Main dependencies
 git+https://github.com/tinkoff-ai/d4rl@master#egg=d4rl
-tqdm==4.64.0
+tqdm==4.65.0
 wandb==0.12.21
 mujoco-py==2.1.2.14
 numpy==1.23.1
