@@ -66,6 +66,7 @@ class TrainConfig:
     reward_bias: float = 0.0  # Reward bias for normalization
     # Cal-QL
     mixing_ratio: float = 0.5  # Data mixing ratio for online tuning
+    is_sparse_reward: bool = False  # Use sparse reward
     # Wandb logging
     project: str = "CORL"
     group: str = "Cal-QL-D4RL"
@@ -271,34 +272,47 @@ def return_reward_range(dataset: Dict, max_episode_steps: int) -> Tuple[float, f
     return min(returns), max(returns)
 
 
-def get_return_to_go(dataset: Dict, gamma: float, max_episode_steps: int) -> List[float]:
+def get_return_to_go(dataset: Dict, env: gym.Env, config: TrainConfig) -> np.ndarray:
     returns = []
     ep_ret, ep_len = 0.0, 0
     cur_rewards = []
     terminals = []
-    for r, d in zip(dataset["rewards"], dataset["terminals"]):
+    N = len(dataset["rewards"])
+    for t, (r, d) in enumerate(zip(dataset["rewards"], dataset["terminals"])):
         ep_ret += float(r)
         cur_rewards.append(float(r))
         terminals.append(float(d))
         ep_len += 1
-        if d or ep_len == max_episode_steps:
+        is_last_step = (
+            (t == N - 1)
+            or (  # noqa
+                np.linalg.norm(
+                    dataset["observations"][t + 1] - dataset["next_observations"][t]
+                )
+                > 1e-6  # noqa
+            )
+            or ep_len == env._max_episode_steps  # noqa
+        )
+
+        if d or is_last_step:
             discounted_returns = [0] * ep_len
             prev_return = 0
-            for i in reversed(range(ep_len)):
-                discounted_returns[i] = cur_rewards[i] + gamma * prev_return * (
-                    1 - terminals[i]
-                )
-                prev_return = discounted_returns[i]
+            if (
+                config.is_sparse_reward
+                and r  # noqa
+                == env.ref_min_score * config.reward_scale + config.reward_bias  # noqa
+            ):
+                discounted_returns = [r / (1 - config.discount)] * ep_len
+            else:
+                for i in reversed(range(ep_len)):
+                    discounted_returns[i] = cur_rewards[
+                        i
+                    ] + config.discount * prev_return * (1 - terminals[i])
+                    prev_return = discounted_returns[i]
             returns += discounted_returns
             ep_ret, ep_len = 0.0, 0
             cur_rewards = []
             terminals = []
-    discounted_returns = [0] * ep_len
-    prev_return = 0
-    for i in reversed(range(ep_len)):
-        discounted_returns[i] = cur_rewards[i] + gamma * prev_return * (1 - terminals[i])
-        prev_return = discounted_returns[i]
-    returns += discounted_returns
     return returns
 
 
@@ -352,7 +366,10 @@ def init_module_weights(module: torch.nn.Module, orthogonal_init: bool = False):
 
 class ReparameterizedTanhGaussian(nn.Module):
     def __init__(
-        self, log_std_min: float = -20.0, log_std_max: float = 2.0, no_tanh: bool = False
+        self,
+        log_std_min: float = -20.0,
+        log_std_max: float = 2.0,
+        no_tanh: bool = False,
     ):
         super().__init__()
         self.log_std_min = log_std_min
@@ -373,7 +390,10 @@ class ReparameterizedTanhGaussian(nn.Module):
         return torch.sum(action_distribution.log_prob(sample), dim=-1)
 
     def forward(
-        self, mean: torch.Tensor, log_std: torch.Tensor, deterministic: bool = False
+        self,
+        mean: torch.Tensor,
+        log_std: torch.Tensor,
+        deterministic: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         log_std = torch.clamp(log_std, self.log_std_min, self.log_std_max)
         std = torch.exp(log_std)
@@ -984,7 +1004,7 @@ def train(config: TrainConfig):
             reward_scale=config.reward_scale,
             reward_bias=config.reward_bias,
         )
-    mc_returns = get_return_to_go(dataset, config.discount, max_episode_steps=1000)
+    mc_returns = get_return_to_go(dataset, env, config)
     dataset["mc_returns"] = np.array(mc_returns)
     assert len(dataset["mc_returns"]) == len(dataset["rewards"])
 
@@ -1044,7 +1064,10 @@ def train(config: TrainConfig):
     critic_2_optimizer = torch.optim.Adam(list(critic_2.parameters()), config.qf_lr)
 
     actor = TanhGaussianPolicy(
-        state_dim, action_dim, max_action, orthogonal_init=config.orthogonal_init
+        state_dim,
+        action_dim,
+        max_action,
+        orthogonal_init=config.orthogonal_init,
     ).to(config.device)
     actor_optimizer = torch.optim.Adam(actor.parameters(), config.policy_lr)
 
@@ -1112,7 +1135,9 @@ def train(config: TrainConfig):
             episode_step += 1
             action, _ = actor(
                 torch.tensor(
-                    state.reshape(1, -1), device=config.device, dtype=torch.float32
+                    state.reshape(1, -1),
+                    device=config.device,
+                    dtype=torch.float32,
                 )
             )
             action = action.cpu().data.numpy().flatten()
