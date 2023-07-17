@@ -138,15 +138,15 @@ add_domains_avg(last_scores)
 add_domains_avg(max_scores)
 
 algorithms = [
-    "BC", 
-    "10% BC", 
-    "TD3+BC", 
-    "AWAC", 
-    "CQL", 
-    "IQL", 
-    "ReBRAC", 
-    "SAC-N", 
-    "EDAC", 
+    "BC",
+    "10% BC",
+    "TD3+BC",
+    "AWAC",
+    "CQL",
+    "IQL",
+    "ReBRAC",
+    "SAC-N",
+    "EDAC",
     "DT",
 ]
 datasets = dataframe["dataset"].unique()
