@@ -147,7 +147,7 @@ algorithms = [
     "ReBRAC", 
     "SAC-N", 
     "EDAC", 
-    "DT"
+    "DT",
 ]
 datasets = dataframe["dataset"].unique()
 ordered_datasets = [
