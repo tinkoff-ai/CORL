@@ -234,7 +234,7 @@ def qlearning_dataset(
         else:
             final_timestep = episode_step == env._max_episode_steps - 1
         if (not terminate_on_end) and final_timestep:
-            # Skip this transition and don't apply terminals on the last step of an episode
+            # Skip this transition
             episode_step = 0
             continue
         if done_bool or final_timestep:
@@ -305,7 +305,7 @@ class ReplayBuffer:
 
     @property
     def size(self) -> int:
-        # WARN: do not use __len__ here! It will use len of the dataclass, i.e. number of fields.
+        # WARN: It will use len of the dataclass, i.e. number of fields.
         return self.data["states"].shape[0]
 
     def sample_batch(
