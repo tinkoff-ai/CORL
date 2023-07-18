@@ -12,7 +12,6 @@ on:
 
 
 jobs:
-
   build:
     name: codestyle
     runs-on: ${{ matrix.os }}
@@ -40,6 +39,5 @@ jobs:
           pip list
         shell: bash
 # <- standard block end ->
-      - name: check codestyle
-        run: |
-          catalyst-check-codestyle --line-length 89
+      - name: check codestyle with ruff linter
+        uses: chartboost/ruff-action@v1
