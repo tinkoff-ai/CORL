@@ -41,7 +41,7 @@ jobs:
 # <- standard block end ->
       - name: check codestyle
         run: |
-          ruff check --config pyproject.toml
+          ruff check --config pyproject.toml .
         shell: bash
 #        uses: chartboost/ruff-action@v1
 #        with:
