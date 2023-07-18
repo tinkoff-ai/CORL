@@ -1,0 +1,15 @@
+batch_size: 256
+buffer_size: 1000000
+checkpoints_path: null
+dataset_id: relocate-expert-v1
+eval_episodes: 10
+eval_every: 5000
+eval_seed: 0
+gamma: 1.0
+group: bc-relocate-expert-v1-multiseed-v0
+name: bc
+normalize_state: true
+project: CORL
+top_fraction: 1.0
+train_seed: 0
+update_steps: 1000000
