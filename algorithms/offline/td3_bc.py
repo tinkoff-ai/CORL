@@ -1,12 +1,12 @@
 # source: https://github.com/sfujim/TD3_BC
 # https://arxiv.org/pdf/2106.06860.pdf
-from typing import Any, Dict, List, Optional, Tuple, Union
 import copy
-from dataclasses import asdict, dataclass
 import os
-from pathlib import Path
 import random
 import uuid
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import d4rl
 import gym
@@ -15,6 +15,7 @@ import pyrallis
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 import wandb
 
 TensorBatch = List[torch.Tensor]
@@ -263,7 +264,7 @@ class Critic(nn.Module):
         return self.net(sa)
 
 
-class TD3_BC:  # noqa
+class TD3_BC:
     def __init__(
         self,
         max_action: float,

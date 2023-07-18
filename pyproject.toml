@@ -1,5 +1,4 @@
 [tool.ruff]
-src = ["algorithms"]
 select = ["E", "F", "I001", "RUF100"]
 ignore = ["E402"]
 line-length = 89

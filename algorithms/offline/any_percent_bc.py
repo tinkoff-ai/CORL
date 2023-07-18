@@ -1,9 +1,9 @@
-from typing import Any, Dict, List, Optional, Tuple, Union
-from dataclasses import asdict, dataclass
 import os
-from pathlib import Path
 import random
 import uuid
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import d4rl
 import gym
@@ -12,6 +12,7 @@ import pyrallis
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 import wandb
 
 TensorBatch = List[torch.Tensor]
@@ -249,7 +250,7 @@ class Actor(nn.Module):
         return self(state).cpu().data.numpy().flatten()
 
 
-class BC:  # noqa
+class BC:
     def __init__(
         self,
         max_action: np.ndarray,

@@ -3,6 +3,4 @@ repos:
     rev: 'v0.0.255'
     hooks:
       - id: ruff
-        args: ["--fix"]
-
-exclude: __init__.py
+        args: [--show-source, --fix, --exit-non-zero-on-fix]

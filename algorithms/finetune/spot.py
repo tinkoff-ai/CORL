@@ -1,12 +1,12 @@
 # source: https://github.com/thuml/SPOT/tree/58c591dc48fbd9ff632b7494eab4caf778e86f4a
 # https://arxiv.org/pdf/2202.06239.pdf
-from typing import Any, Dict, List, Optional, Tuple, Union
 import copy
-from dataclasses import asdict, dataclass
 import os
-from pathlib import Path
 import random
 import uuid
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import d4rl
 import gym
@@ -16,6 +16,7 @@ import torch
 import torch.distributions as td
 import torch.nn as nn
 import torch.nn.functional as F
+
 import wandb
 
 TensorBatch = List[torch.Tensor]
@@ -456,7 +457,7 @@ class Critic(nn.Module):
         return self.net(sa)
 
 
-class SPOT:  # noqa
+class SPOT:
     def __init__(
         self,
         max_action: float,

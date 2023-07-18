@@ -1,22 +1,23 @@
 # Inspired by:
 # 1. paper for SAC-N: https://arxiv.org/abs/2110.01548
 # 2. implementation: https://github.com/snu-mllab/EDAC
-from typing import Any, Dict, List, Optional, Tuple, Union
-from copy import deepcopy
-from dataclasses import asdict, dataclass
 import math
 import os
 import random
 import uuid
+from copy import deepcopy
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import d4rl
 import gym
 import numpy as np
 import pyrallis
 import torch
-from torch.distributions import Normal
 import torch.nn as nn
+from torch.distributions import Normal
 from tqdm import trange
+
 import wandb
 
 
@@ -308,7 +309,7 @@ class SACN:
         gamma: float = 0.99,
         tau: float = 0.005,
         alpha_learning_rate: float = 1e-4,
-        device: str = "cpu",  # noqa
+        device: str = "cpu",
     ):
         self.device = device
 
