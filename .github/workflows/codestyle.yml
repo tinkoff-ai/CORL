@@ -40,7 +40,10 @@ jobs:
         shell: bash
 # <- standard block end ->
       - name: check codestyle
-        uses: chartboost/ruff-action@v1
-        with:
-          version: 0.0.278
-          args: --config ./pyproject.toml
+        run: |
+          ruff check --config pyproject.toml
+        shell: bash
+#        uses: chartboost/ruff-action@v1
+#        with:
+#          version: 0.0.278
+#          args: check --config ./pyproject.toml
