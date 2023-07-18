@@ -16,6 +16,7 @@ from tqdm import trange
 
 import wandb
 
+
 TensorBatch = List[torch.Tensor]
 
 ENVS_WITH_GOAL = ("antmaze", "pen", "door", "hammer", "relocate")

@@ -4,8 +4,7 @@ ignore = ["E402"]
 line-length = 89
 target-version = "py38"
 
-[too.ruff.isort]
+[tool.ruff.isort]
 combine-as-imports = true
 lines-after-imports = 2
 order-by-type = false
-line_length = 89

@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from rliable import library as rly
-from rliable import metrics, plot_utils
+from rliable import library as rly, metrics, plot_utils
+
 
 dataframe = pd.read_csv("runs_tables/finetune_urls.csv")
 with open("bin/finetune_scores.pickle", "rb") as handle:
