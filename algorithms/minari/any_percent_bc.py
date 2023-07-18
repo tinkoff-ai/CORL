@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional, Tuple, Union
+import contextlib
 from dataclasses import asdict, dataclass
 import os
 import random
@@ -12,6 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm.auto import trange
+
 import wandb
 
 TensorBatch = List[torch.Tensor]
@@ -28,7 +30,7 @@ class TrainConfig:
     gamma: float = 0.99  # Discount factor
     top_fraction: float = 0.1  # Best data fraction to use
     # training params
-    dataset_id: str = "pen-human-v0"  # Minari remote dataset name
+    dataset_id: str = "pen-human-v1"  # Minari remote dataset name
     update_steps: int = int(1e6)  # Total training networks updates
     buffer_size: int = 2_000_000  # Replay buffer size
     batch_size: int = 256  # Batch size for all networks
@@ -292,20 +294,20 @@ def train(config: TrainConfig):
     action_dim = eval_env.action_space.shape[0]
     max_action = float(eval_env.action_space.high[0])
 
-    dataset = qlearning_dataset(
+    qdataset = qlearning_dataset(
         dataset=dataset,
         traj_ids=best_trajectories_ids(dataset, config.top_fraction, config.gamma),
     )
     if config.normalize_state:
-        state_mean, state_std = compute_mean_std(dataset["observations"], eps=1e-3)
+        state_mean, state_std = compute_mean_std(qdataset["observations"], eps=1e-3)
     else:
         state_mean, state_std = 0, 1
 
-    dataset["observations"] = normalize_states(
-        dataset["observations"], state_mean, state_std
+    qdataset["observations"] = normalize_states(
+        qdataset["observations"], state_mean, state_std
     )
-    dataset["next_observations"] = normalize_states(
-        dataset["next_observations"], state_mean, state_std
+    qdataset["next_observations"] = normalize_states(
+        qdataset["next_observations"], state_mean, state_std
     )
     eval_env = wrap_env(eval_env, state_mean=state_mean, state_std=state_std)
     replay_buffer = ReplayBuffer(
@@ -314,7 +316,7 @@ def train(config: TrainConfig):
         config.buffer_size,
         DEVICE,
     )
-    replay_buffer.load_dataset(dataset)
+    replay_buffer.load_dataset(qdataset)
 
     if config.checkpoints_path is not None:
         print(f"Checkpoints path: {config.checkpoints_path}")
@@ -349,14 +351,13 @@ def train(config: TrainConfig):
                 seed=config.eval_seed,
                 device=DEVICE,
             )
-            eval_score = eval_scores.mean()
-            # TODO: Minari does not have normalized scores. We will revisit this later.
-            # normalized_eval_score = env.get_normalized_score(eval_score) * 100.0
-            wandb.log(
-                # {"d4rl_normalized_score": normalized_eval_score},
-                {"evaluation_return": eval_score},
-                step=step,
-            )
+            wandb.log({"evaluation_return": eval_scores.mean()}, step=step)
+            # optional normalized score logging, only if dataset has reference scores
+            with contextlib.suppress(ValueError):
+                normalized_score = (
+                    minari.get_normalized_score(dataset, eval_scores).mean() * 100
+                )
+                wandb.log({"normalized_score": normalized_score}, step=step)
 
             if config.checkpoints_path is not None:
                 torch.save(

@@ -6,6 +6,7 @@
 # 2. MLP class introduced bugs in the past. We should remove it.
 # 3. Refactor IQL updating code to be more consistent in style
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+import contextlib
 import copy
 from dataclasses import asdict, dataclass
 import os
@@ -22,6 +23,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm.auto import trange
+
 import wandb
 
 TensorBatch = List[torch.Tensor]
@@ -49,7 +51,7 @@ class TrainConfig:
     actor_lr: float = 3e-4  # Actor learning rate
     actor_dropout: Optional[float] = None  # Adroit uses dropout for policy network
     # training params
-    dataset_id: str = "pen-human-v0"  # Minari remote dataset name
+    dataset_id: str = "pen-human-v1"  # Minari remote dataset name
     update_steps: int = int(1e6)  # Total training networks updates
     buffer_size: int = 2_000_000  # Replay buffer size
     batch_size: int = 256  # Batch size for all networks
@@ -114,7 +116,9 @@ def wrap_env(
 
 
 # This is how reward normalization among all datasets is done in original IQL
-def return_reward_range(dataset, max_episode_steps):
+def return_reward_range(
+    dataset: Dict[str, np.ndarray], max_episode_steps: int
+) -> Tuple[float, float]:
     returns, lengths = [], []
     ep_ret, ep_len = 0.0, 0
     for r, d in zip(dataset["rewards"], dataset["terminals"]):
@@ -129,7 +133,9 @@ def return_reward_range(dataset, max_episode_steps):
     return min(returns), max(returns)
 
 
-def modify_reward(dataset, env_name, max_episode_steps=1000):
+def modify_reward(
+    dataset: Dict[str, np.ndarray], env_name: str, max_episode_steps: int = 1000
+):
     if any(s in env_name for s in ("halfcheetah", "hopper", "walker2d")):
         min_ret, max_ret = return_reward_range(dataset, max_episode_steps)
         dataset["rewards"] /= max_ret - min_ret
@@ -539,20 +545,20 @@ def train(config: TrainConfig):
     action_dim = eval_env.action_space.shape[0]
     max_action = float(eval_env.action_space.high[0])
 
-    dataset = qlearning_dataset(dataset)
+    qdataset = qlearning_dataset(dataset)
     if config.normalize_reward:
-        modify_reward(dataset, config.dataset_id)
+        modify_reward(qdataset, config.dataset_id)
 
     if config.normalize_state:
-        state_mean, state_std = compute_mean_std(dataset["observations"], eps=1e-3)
+        state_mean, state_std = compute_mean_std(qdataset["observations"], eps=1e-3)
     else:
         state_mean, state_std = 0, 1
 
-    dataset["observations"] = normalize_states(
-        dataset["observations"], state_mean, state_std
+    qdataset["observations"] = normalize_states(
+        qdataset["observations"], state_mean, state_std
     )
-    dataset["next_observations"] = normalize_states(
-        dataset["next_observations"], state_mean, state_std
+    qdataset["next_observations"] = normalize_states(
+        qdataset["next_observations"], state_mean, state_std
     )
 
     eval_env = wrap_env(eval_env, state_mean=state_mean, state_std=state_std)
@@ -562,7 +568,7 @@ def train(config: TrainConfig):
         config.buffer_size,
         DEVICE,
     )
-    replay_buffer.load_dataset(dataset)
+    replay_buffer.load_dataset(qdataset)
 
     if config.checkpoints_path is not None:
         print(f"Checkpoints path: {config.checkpoints_path}")
@@ -619,14 +625,13 @@ def train(config: TrainConfig):
                 seed=config.eval_seed,
                 device=DEVICE,
             )
-            eval_score = eval_scores.mean()
-            # TODO: Minari does not have normalized scores. We will revisit this later.
-            # normalized_eval_score = env.get_normalized_score(eval_score) * 100.0
-            wandb.log(
-                # {"d4rl_normalized_score": normalized_eval_score}, step=trainer.total_it
-                {"evaluation_return": eval_score},
-                step=step,
-            )
+            wandb.log({"evaluation_return": eval_scores.mean()}, step=step)
+            # optional normalized score logging, only if dataset has reference scores
+            with contextlib.suppress(ValueError):
+                normalized_score = (
+                    minari.get_normalized_score(dataset, eval_scores).mean() * 100
+                )
+                wandb.log({"normalized_score": normalized_score}, step=step)
 
             if config.checkpoints_path is not None:
                 torch.save(
