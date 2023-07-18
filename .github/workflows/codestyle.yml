@@ -39,5 +39,8 @@ jobs:
           pip list
         shell: bash
 # <- standard block end ->
-      - name: check codestyle with ruff linter
+      - name: check codestyle
         uses: chartboost/ruff-action@v1
+        with:
+          version: 0.0.278
+          args: --config ./pyproject.toml
