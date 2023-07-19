@@ -16,7 +16,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements/requirements.txt
-      - name: Lint with ruff
+          pip install -r requirements/requirements_dev.txt
+      - name: check codestyle
         run: |
           ruff --config pyproject.toml --diff .
