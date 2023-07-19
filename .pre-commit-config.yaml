@@ -3,5 +3,4 @@ repos:
     rev: 'v0.0.278'
     hooks:
       - id: ruff
-#        args: [--diff]
         args: [--fix]
