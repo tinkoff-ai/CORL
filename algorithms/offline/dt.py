@@ -14,10 +14,11 @@ import numpy as np
 import pyrallis
 import torch
 import torch.nn as nn
-import wandb
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, IterableDataset
 from tqdm.auto import tqdm, trange  # noqa
+
+import wandb
 
 @dataclass
 class TrainConfig:

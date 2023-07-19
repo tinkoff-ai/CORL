@@ -5,26 +5,27 @@ import os
 
 os.environ["TF_CUDNN_DETERMINISTIC"] = "1"  # For reproducibility
 
-from typing import Any, Callable, Dict, Sequence, Tuple, Union  # noqa
-from copy import deepcopy  # noqa
-from dataclasses import asdict, dataclass  # noqa
-from functools import partial  # noqa
-import math  # noqa
-import uuid  # noqa
+import math
+import uuid
+from copy import deepcopy
+from dataclasses import asdict, dataclass
+from functools import partial
+from typing import Any, Callable, Dict, Sequence, Tuple, Union
 
-import chex  # noqa
+import chex
 import d4rl  # noqa
-from flax.core import FrozenDict  # noqa
-import flax.linen as nn  # noqa
-from flax.training.train_state import TrainState  # noqa
-import gym  # noqa
-import jax  # noqa
-import jax.numpy as jnp  # noqa
-import numpy as np  # noqa
-import optax  # noqa
-import pyrallis  # noqa
-from tqdm.auto import trange  # noqa
-import wandb  # noqa
+import flax.linen as nn
+import gym
+import jax
+import jax.numpy as jnp
+import numpy as np
+import optax
+import pyrallis
+from flax.core import FrozenDict
+from flax.training.train_state import TrainState
+from tqdm.auto import trange
+
+import wandb
 
 default_kernel_init = nn.initializers.lecun_normal()
 default_bias_init = nn.initializers.zeros
@@ -481,7 +482,7 @@ def update_critic(
     batch: Dict[str, jax.Array],
     gamma: float,
     beta: float,
-    tau: float,  # noqa
+    tau: float,
     policy_noise: float,
     noise_clip: float,
     metrics: Metrics,
@@ -562,7 +563,7 @@ def update_td3_no_targets(
     batch: Dict[str, Any],
     gamma: float,
     metrics: Metrics,
-    actor_bc_coef: float,  # noqa
+    actor_bc_coef: float,
     critic_bc_coef: float,
     tau: float,
     policy_noise: float,

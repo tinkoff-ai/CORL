@@ -12,8 +12,9 @@ import pyrallis
 import torch
 import torch.nn as nn
 import torch.nn.functional
-import wandb
 from tqdm import trange
+
+import wandb
 
 TensorBatch = List[torch.Tensor]
 

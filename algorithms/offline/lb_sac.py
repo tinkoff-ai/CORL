@@ -15,9 +15,10 @@ import numpy as np
 import pyrallis
 import torch
 import torch.nn as nn
-import wandb
 from torch.distributions import Normal
 from tqdm import trange
+
+import wandb
 
 # base batch size: 256
 # base learning rate: 3e-4
