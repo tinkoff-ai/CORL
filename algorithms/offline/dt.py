@@ -1,24 +1,23 @@
 # inspiration:
 # 1. https://github.com/kzl/decision-transformer/blob/master/gym/decision_transformer/models/decision_transformer.py  # noqa
 # 2. https://github.com/karpathy/minGPT
-from typing import Any, DefaultDict, Dict, List, Optional, Tuple, Union
-from collections import defaultdict
-from dataclasses import asdict, dataclass
 import os
 import random
 import uuid
+from collections import defaultdict
+from dataclasses import asdict, dataclass
+from typing import Any, DefaultDict, Dict, List, Optional, Tuple, Union
 
 import d4rl  # noqa
-import gym  # noqa
+import gym
 import numpy as np
 import pyrallis
 import torch
 import torch.nn as nn
-from torch.nn import functional as F  # noqa
+import wandb
+from torch.nn import functional as F
 from torch.utils.data import DataLoader, IterableDataset
 from tqdm.auto import tqdm, trange  # noqa
-import wandb
-
 
 @dataclass
 class TrainConfig:
@@ -381,10 +380,10 @@ def eval_rollout(
         # step + 1 as : operator is not inclusive, last action is dummy with zeros
         # (as model will predict last, actual last values are not important)
         predicted_actions = model(  # fix this noqa!!!
-            states[:, : step + 1][:, -model.seq_len :],  # noqa
-            actions[:, : step + 1][:, -model.seq_len :],  # noqa
-            returns[:, : step + 1][:, -model.seq_len :],  # noqa
-            time_steps[:, : step + 1][:, -model.seq_len :],  # noqa
+            states[:, : step + 1][:, -model.seq_len :],
+            actions[:, : step + 1][:, -model.seq_len :],
+            returns[:, : step + 1][:, -model.seq_len :],
+            time_steps[:, : step + 1][:, -model.seq_len :],
         )
         predicted_action = predicted_actions[0, -1].cpu().numpy()
         next_state, reward, done, info = env.step(predicted_action)

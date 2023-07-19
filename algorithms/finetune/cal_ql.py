@@ -1,22 +1,22 @@
 # source: https://github.com/nakamotoo/Cal-QL/tree/main
 # https://arxiv.org/pdf/2303.05479.pdf
-from typing import Any, Dict, List, Optional, Tuple, Union
-from copy import deepcopy
-from dataclasses import asdict, dataclass
 import os
-from pathlib import Path
 import random
 import uuid
+from copy import deepcopy
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import d4rl
 import gym
 import numpy as np
 import pyrallis
 import torch
-from torch.distributions import Normal, TanhTransform, TransformedDistribution
 import torch.nn as nn
 import torch.nn.functional as F
 import wandb
+from torch.distributions import Normal, TanhTransform, TransformedDistribution
 
 TensorBatch = List[torch.Tensor]
 
@@ -285,13 +285,13 @@ def get_return_to_go(dataset: Dict, env: gym.Env, config: TrainConfig) -> np.nda
         ep_len += 1
         is_last_step = (
             (t == N - 1)
-            or (  # noqa
+            or (
                 np.linalg.norm(
                     dataset["observations"][t + 1] - dataset["next_observations"][t]
                 )
-                > 1e-6  # noqa
+                > 1e-6
             )
-            or ep_len == env._max_episode_steps  # noqa
+            or ep_len == env._max_episode_steps
         )
 
         if d or is_last_step:
@@ -299,8 +299,8 @@ def get_return_to_go(dataset: Dict, env: gym.Env, config: TrainConfig) -> np.nda
             prev_return = 0
             if (
                 config.is_sparse_reward
-                and r  # noqa
-                == env.ref_min_score * config.reward_scale + config.reward_bias  # noqa
+                and r
+                == env.ref_min_score * config.reward_scale + config.reward_bias
             ):
                 discounted_returns = [r / (1 - config.discount)] * ep_len
             else:
@@ -818,14 +818,14 @@ class CalQL:
                 torch.exp(self.log_alpha_prime()), min=0.0, max=1000000.0
             )
             cql_min_qf1_loss = (
-                alpha_prime  # noqa
-                * self.cql_alpha  # noqa
-                * (cql_qf1_diff - self.cql_target_action_gap)  # noqa
+                alpha_prime
+                * self.cql_alpha
+                * (cql_qf1_diff - self.cql_target_action_gap)
             )
             cql_min_qf2_loss = (
-                alpha_prime  # noqa
-                * self.cql_alpha  # noqa
-                * (cql_qf2_diff - self.cql_target_action_gap)  # noqa
+                alpha_prime
+                * self.cql_alpha
+                * (cql_qf2_diff - self.cql_target_action_gap)
             )
 
             self.alpha_prime_optimizer.zero_grad()

@@ -1,5 +1,10 @@
-[tool.nitpick]
-style = "https://raw.githubusercontent.com/catalyst-team/codestyle/v21.09.2/styles/nitpick-style-catalyst.toml"
-
-[tool.black]
+[tool.ruff]
+select = ["E", "F", "I001", "RUF100"]
+ignore = ["E402"]
 line-length = 89
+target-version = "py39"
+
+[tool.ruff.isort]
+combine-as-imports = true
+lines-after-imports = 1
+order-by-type = false
