@@ -5,26 +5,25 @@
 # 1. iql_deterministic is true only for 2 datasets. Can we remote it?
 # 2. MLP class introduced bugs in the past. We should remove it.
 # 3. Refactor IQL updating code to be more consistent in style
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import contextlib
 import copy
-from dataclasses import asdict, dataclass
 import os
 import random
 import uuid
+from dataclasses import asdict, dataclass
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import gymnasium as gym
 import minari
 import numpy as np
 import pyrallis
 import torch
-from torch.distributions import Normal
 import torch.nn as nn
 import torch.nn.functional as F
+import wandb
+from torch.distributions import Normal
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm.auto import trange
-
-import wandb
 
 TensorBatch = List[torch.Tensor]
 

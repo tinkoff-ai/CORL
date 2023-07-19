@@ -1,9 +1,9 @@
-from typing import Any, Dict, List, Optional, Tuple, Union
 import contextlib
-from dataclasses import asdict, dataclass
 import os
 import random
 import uuid
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import gymnasium as gym
 import minari
@@ -12,9 +12,8 @@ import pyrallis
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from tqdm.auto import trange
-
 import wandb
+from tqdm.auto import trange
 
 TensorBatch = List[torch.Tensor]
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
