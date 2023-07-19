@@ -4,8 +4,8 @@ import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from rliable import library as rly, metrics, plot_utils
 import seaborn as sns
+from rliable import library as rly, metrics, plot_utils
 
 dataframe = pd.read_csv("runs_tables/finetune_urls.csv")
 with open("bin/finetune_scores.pickle", "rb") as handle:
@@ -173,7 +173,7 @@ def get_table(
             if data in stds[algo]:
                 row.append(
                     f"{scores[algo][data]:.2f} {pm} {stds[algo][data]:.2f}"
-                    + (  # noqa
+                    + (
                         ""
                         if scores2 is None
                         else f"{scores_delim} {scores2[algo][data]:.2f} {pm} {stds2[algo][data]:.2f}"  # noqa
@@ -182,7 +182,7 @@ def get_table(
             else:
                 row.append(
                     f"{scores[algo][data]:.2f}"
-                    + (  # noqa
+                    + (
                         ""
                         if scores2 is None
                         else f"{scores_delim} {scores2[algo][data]:.2f}"

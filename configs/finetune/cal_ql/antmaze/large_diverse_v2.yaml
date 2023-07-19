@@ -38,3 +38,4 @@ q_n_hidden_layers: 5
 reward_scale: 10.0
 reward_bias: -5.0
 use_automatic_entropy_tuning: true
+is_sparse_reward: true

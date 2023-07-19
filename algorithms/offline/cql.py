@@ -1,22 +1,22 @@
 # source: https://github.com/young-geng/CQL/tree/934b0e8354ca431d6c083c4e3a29df88d4b0a24d
 # https://arxiv.org/pdf/2006.04779.pdf
-from typing import Any, Dict, List, Optional, Tuple, Union
-from copy import deepcopy
-from dataclasses import asdict, dataclass
 import os
-from pathlib import Path
 import random
 import uuid
+from copy import deepcopy
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import d4rl
 import gym
 import numpy as np
 import pyrallis
 import torch
-from torch.distributions import Normal, TanhTransform, TransformedDistribution
 import torch.nn as nn
 import torch.nn.functional as F
 import wandb
+from torch.distributions import Normal, TanhTransform, TransformedDistribution
 
 TensorBatch = List[torch.Tensor]
 
@@ -683,14 +683,14 @@ class ContinuousCQL:
                 torch.exp(self.log_alpha_prime()), min=0.0, max=1000000.0
             )
             cql_min_qf1_loss = (
-                alpha_prime  # noqa
-                * self.cql_alpha  # noqa
-                * (cql_qf1_diff - self.cql_target_action_gap)  # noqa
+                alpha_prime
+                * self.cql_alpha
+                * (cql_qf1_diff - self.cql_target_action_gap)
             )
             cql_min_qf2_loss = (
-                alpha_prime  # noqa
-                * self.cql_alpha  # noqa
-                * (cql_qf2_diff - self.cql_target_action_gap)  # noqa
+                alpha_prime
+                * self.cql_alpha
+                * (cql_qf2_diff - self.cql_target_action_gap)
             )
 
             self.alpha_prime_optimizer.zero_grad()
