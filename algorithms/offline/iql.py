@@ -1,23 +1,23 @@
 # source: https://github.com/gwthomas/IQL-PyTorch
 # https://arxiv.org/pdf/2110.06169.pdf
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import copy
-from dataclasses import asdict, dataclass
 import os
-from pathlib import Path
 import random
 import uuid
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import d4rl
 import gym
 import numpy as np
 import pyrallis
 import torch
-from torch.distributions import Normal
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.optim.lr_scheduler import CosineAnnealingLR
 import wandb
+from torch.distributions import Normal
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 TensorBatch = List[torch.Tensor]
 
