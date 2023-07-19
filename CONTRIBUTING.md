@@ -91,6 +91,9 @@ parameters:
 ```
 Then proceed as usual. Create wandb sweep with `wandb sweep sweep_config.yaml`, then run agents with `wandb agent <agent_id>`.
 
+Based on the results, you will need to make wandb reports to make it easier for other users to understand. 
+You can use any of the already existing ones as an example (see [README.md](README.md)).
+
 ### Checklist
 
 - [ ] Issue about new algorithm is open
@@ -98,4 +101,4 @@ Then proceed as usual. Create wandb sweep with `wandb sweep sweep_config.yaml`, 
 - [ ] PR has passed all the tests
 - [ ] Evidence that implementation reproduces original results is provided
 - [ ] Configs with the best hyperparameters for all datasets are added to the `configs/contrib`
-- [ ] Logs for best hyperparameters are submitted to our wandb organization
+- [ ] Logs and reports for best hyperparameters are submitted to our wandb organization
