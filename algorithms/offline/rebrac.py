@@ -21,11 +21,10 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 import pyrallis
+import wandb
 from flax.core import FrozenDict
 from flax.training.train_state import TrainState
 from tqdm.auto import trange
-
-import wandb
 
 default_kernel_init = nn.initializers.lecun_normal()
 default_bias_init = nn.initializers.zeros

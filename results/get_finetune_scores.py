@@ -2,9 +2,8 @@ import os
 import pickle
 
 import pandas as pd
-from tqdm import tqdm
-
 import wandb
+from tqdm import tqdm
 
 dataframe = pd.read_csv("runs_tables/finetune_urls.csv")
 
