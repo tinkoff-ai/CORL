@@ -1,7 +1,5 @@
 import pandas as pd
-
 import wandb
-
 
 collected_urls = {
     "algorithm": [],

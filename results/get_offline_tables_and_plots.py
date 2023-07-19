@@ -7,7 +7,6 @@ import pandas as pd
 import seaborn as sns
 from rliable import library as rly, metrics, plot_utils
 
-
 dataframe = pd.read_csv("runs_tables/offline_urls.csv")
 with open("bin/offline_scores.pickle", "rb") as handle:
     full_scores = pickle.load(handle)

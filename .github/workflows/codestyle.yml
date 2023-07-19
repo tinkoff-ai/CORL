@@ -1,51 +1,22 @@
-name: codestyle
-# <- standard block end ->
+name: codestyle check
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
-      - dev
-      - develop
       - main
-
 
 jobs:
   build:
-    name: codestyle
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      max-parallel: 4
-      matrix:
-        os: [ubuntu-20.04]
-        python-version: [3.8]
-    timeout-minutes: 30
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-
-      - name: set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v1
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: install dependencies
+          python-version: "3.9"
+      - name: Install dependencies
         run: |
-          # python -m pip install --upgrade --user pip
-          pip install -r requirements/requirements_dev.txt
-          python --version
-          pip --version
-          pip list
-        shell: bash
-# <- standard block end ->
-      - name: check codestyle
-#        run: |
-#          ruff --version
-#          ruff clean
-#          ruff check --config pyproject.toml --diff .
-#        shell: bash
-        uses: chartboost/ruff-action@v1
-        with:
-          version: 0.0.278
-          args: --config pyproject.toml
+          python -m pip install --upgrade pip
+          pip install -r requirements/requirements.txt
+      - name: Lint with ruff
+        run: |
+          ruff --config pyproject.toml --diff .

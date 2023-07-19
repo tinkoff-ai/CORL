@@ -6,5 +6,5 @@ target-version = "py38"
 
 [tool.ruff.isort]
 combine-as-imports = true
-lines-after-imports = 2
+lines-after-imports = 1
 order-by-type = false

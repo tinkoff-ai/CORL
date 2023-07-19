@@ -16,9 +16,7 @@ import torch
 import torch.distributions as td
 import torch.nn as nn
 import torch.nn.functional as F
-
 import wandb
-
 
 TensorBatch = List[torch.Tensor]
 ENVS_WITH_GOAL = ("antmaze", "pen", "door", "hammer", "relocate")
