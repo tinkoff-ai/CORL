@@ -2,7 +2,7 @@
 select = ["E", "F", "I001", "RUF100"]
 ignore = ["E402"]
 line-length = 89
-target-version = "py38"
+target-version = "py39"
 
 [tool.ruff.isort]
 combine-as-imports = true
