@@ -18,6 +18,8 @@ def get_urls(sweep_id, algo_name):
             dataset = run.config["env"]
         elif "env_name" in run.config:
             dataset = run.config["env_name"]
+        elif "dataset_name" in run.config:
+            dataset = run.config["dataset_name"]
         name = algo_name
         if "10" in "-".join(run.name.split("-")[:-1]):
             name = "10% " + name
@@ -80,6 +82,8 @@ get_urls("tlab/CORL/sweeps/e1e6fzv1", "BC")
 get_urls("tlab/CORL/sweeps/sg1hx5v7", "DT")
 
 get_urls("tlab/CORL/sweeps/nev3j9wx", "EDAC")
+
+get_urls("tlab/CORL/sweeps/03sfog1g", "ReBRAC")
 
 # OLD RUNS
 # BC

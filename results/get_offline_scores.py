@@ -5,7 +5,7 @@ import pandas as pd
 import wandb
 from tqdm import tqdm
 
-dataframe = pd.read_csv("offline_urls.csv")
+dataframe = pd.read_csv("runs_tables/offline_urls.csv")
 
 api = wandb.Api(timeout=29)
 

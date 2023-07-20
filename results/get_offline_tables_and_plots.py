@@ -137,7 +137,18 @@ def add_domains_avg(scores):
 add_domains_avg(last_scores)
 add_domains_avg(max_scores)
 
-algorithms = ["BC", "10% BC", "TD3+BC", "AWAC", "CQL", "IQL", "SAC-N", "EDAC", "DT"]
+algorithms = [
+    "BC",
+    "10% BC",
+    "TD3+BC",
+    "AWAC",
+    "CQL",
+    "IQL",
+    "ReBRAC",
+    "SAC-N",
+    "EDAC",
+    "DT",
+]
 datasets = dataframe["dataset"].unique()
 ordered_datasets = [
     "halfcheetah-medium-v2",
@@ -458,8 +469,8 @@ plt.close()
 
 algorithm_pairs = {}
 sns.set(style="ticks", font_scale=0.5)
-algs = ["AWAC", "EDAC", "SAC-N", "CQL", "TD3+BC", "DT", "BC", "10% BC"]
-for a1 in ["IQL"]:
+algs = ["IQL", "AWAC", "EDAC", "SAC-N", "CQL", "TD3+BC", "DT", "BC", "10% BC"]
+for a1 in ["ReBRAC"]:
     for a2 in algs:
         algorithm_pairs[f"{a1},{a2}"] = (flat[a1], flat[a2])
 average_probabilities, average_prob_cis = rly.get_interval_estimates(
