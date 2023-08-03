@@ -15,9 +15,10 @@ import pyrallis
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import wandb
 from torch.distributions import Normal
 from torch.optim.lr_scheduler import CosineAnnealingLR
+
+import wandb
 
 TensorBatch = List[torch.Tensor]
 
@@ -57,6 +58,8 @@ class TrainConfig:
     vf_lr: float = 3e-4  # V function learning rate
     qf_lr: float = 3e-4  # Critic learning rate
     actor_lr: float = 3e-4  # Actor learning rate
+    activation: str = "relu"
+    layernorm: bool = False
     # Wandb logging
     project: str = "CORL"
     group: str = "IQL-D4RL"
@@ -301,6 +304,7 @@ class MLP(nn.Module):
         output_activation_fn: Callable[[], nn.Module] = None,
         squeeze_output: bool = False,
         dropout: float = 0.0,
+        layernorm: bool = False,
     ):
         super().__init__()
         n_dims = len(dims)
@@ -311,6 +315,8 @@ class MLP(nn.Module):
         for i in range(n_dims - 2):
             layers.append(nn.Linear(dims[i], dims[i + 1]))
             layers.append(activation_fn())
+            if layernorm:
+                layers.append(nn.LayerNorm(dims[i + 1]))
             if dropout > 0.0:
                 layers.append(nn.Dropout(dropout))
         layers.append(nn.Linear(dims[-2], dims[-1]))
@@ -335,12 +341,14 @@ class GaussianPolicy(nn.Module):
         hidden_dim: int = 256,
         n_hidden: int = 2,
         dropout: float = 0.0,
+        layernorm: bool = False,
     ):
         super().__init__()
         self.net = MLP(
             [state_dim, *([hidden_dim] * n_hidden), act_dim],
             output_activation_fn=nn.Tanh,
             dropout=dropout,
+            layernorm=layernorm,
         )
         self.log_std = nn.Parameter(torch.zeros(act_dim, dtype=torch.float32))
         self.max_action = max_action
@@ -368,12 +376,14 @@ class DeterministicPolicy(nn.Module):
         hidden_dim: int = 256,
         n_hidden: int = 2,
         dropout: float = 0.0,
+        layernorm: bool = False,
     ):
         super().__init__()
         self.net = MLP(
             [state_dim, *([hidden_dim] * n_hidden), act_dim],
             output_activation_fn=nn.Tanh,
             dropout=dropout,
+            layernorm=layernorm,
         )
         self.max_action = max_action
 
@@ -393,12 +403,16 @@ class DeterministicPolicy(nn.Module):
 
 class TwinQ(nn.Module):
     def __init__(
-        self, state_dim: int, action_dim: int, hidden_dim: int = 256, n_hidden: int = 2
+        self, state_dim: int, action_dim: int, hidden_dim: int = 256, n_hidden: int = 2,
+        activation: str = "relu", layernorm: bool = False,
     ):
         super().__init__()
+        af = nn.ReLU
+        if activation == "tanh":
+            af = nn.Tanh
         dims = [state_dim + action_dim, *([hidden_dim] * n_hidden), 1]
-        self.q1 = MLP(dims, squeeze_output=True)
-        self.q2 = MLP(dims, squeeze_output=True)
+        self.q1 = MLP(dims, squeeze_output=True, activation_fn=af, layernorm=layernorm)
+        self.q2 = MLP(dims, squeeze_output=True, activation_fn=af, layernorm=layernorm)
 
     def both(
         self, state: torch.Tensor, action: torch.Tensor
@@ -411,10 +425,17 @@ class TwinQ(nn.Module):
 
 
 class ValueFunction(nn.Module):
-    def __init__(self, state_dim: int, hidden_dim: int = 256, n_hidden: int = 2):
+    def __init__(
+            self, state_dim: int, hidden_dim: int = 256, n_hidden: int = 2,
+            activation: str = "relu", layernorm: bool = False,
+    ):
         super().__init__()
+        af = nn.ReLU
+        if activation == "tanh":
+            af = nn.Tanh
+        # print("!!!!!!!AF", af)
         dims = [state_dim, *([hidden_dim] * n_hidden), 1]
-        self.v = MLP(dims, squeeze_output=True)
+        self.v = MLP(dims, squeeze_output=True, activation_fn=af, layernorm=layernorm)
 
     def forward(self, state: torch.Tensor) -> torch.Tensor:
         return self.v(state)
@@ -615,15 +636,21 @@ def train(config: TrainConfig):
     set_seed(seed, env)
     set_env_seed(eval_env, config.eval_seed)
 
-    q_network = TwinQ(state_dim, action_dim).to(config.device)
-    v_network = ValueFunction(state_dim).to(config.device)
+    q_network = TwinQ(
+        state_dim, action_dim, activation=config.activation, layernorm=config.layernorm
+    ).to(config.device)
+    v_network = ValueFunction(
+        state_dim, activation=config.activation, layernorm=config.layernorm
+    ).to(config.device)
     actor = (
         DeterministicPolicy(
-            state_dim, action_dim, max_action, dropout=config.actor_dropout
+            state_dim, action_dim, max_action, dropout=config.actor_dropout,
+            layernorm=config.layernorm
         )
         if config.iql_deterministic
         else GaussianPolicy(
-            state_dim, action_dim, max_action, dropout=config.actor_dropout
+            state_dim, action_dim, max_action, dropout=config.actor_dropout,
+            layernorm=config.layernorm
         )
     ).to(config.device)
     v_optimizer = torch.optim.Adam(v_network.parameters(), lr=config.vf_lr)
